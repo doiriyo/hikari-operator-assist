@@ -1,4 +1,7 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
+
+const DIFY_API_URL = "https://api.dify.ai/v1/chat-messages";
+const DIFY_API_KEY = "app-3FRus6A0PmVdDo8oFDT2r90G";
 
 const MOCK_KB = [
   {
@@ -77,7 +80,9 @@ const DEMO_SCRIPT = [
 
 export default function App() {
   const [transcript, setTranscript] = useState([]);
-  const [result, setResult] = useState(null);
+  const [kbResult, setKbResult] = useState(null);
+  const [aiResponse, setAiResponse] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [callActive, setCallActive] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -86,6 +91,10 @@ export default function App() {
   const transcriptRef = useRef(null);
   const timerRef = useRef(null);
   const demoRef = useRef(null);
+  const difyTimerRef = useRef(null);
+  const conversationIdRef = useRef("");
+  const lastSentRef = useRef("");
+  const recognitionRef = useRef(null);
 
   useEffect(() => {
     if (transcriptRef.current) {
@@ -105,6 +114,47 @@ export default function App() {
 
   const fmt = s => `${String(Math.floor(s/60)).padStart(2,"0")}:${String(s%60).padStart(2,"0")}`;
 
+  const callDifyAPI = useCallback(async (fullText) => {
+    if (!fullText.trim() || fullText === lastSentRef.current) return;
+    lastSentRef.current = fullText;
+    setAiLoading(true);
+
+    try {
+      const res = await fetch(DIFY_API_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${DIFY_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          inputs: {},
+          query: `以下はお客様との通話内容です。この内容に基づいて、オペレーターが取るべき対応手順を簡潔に案内してください。\n\n通話内容:\n${fullText}`,
+          response_mode: "blocking",
+          conversation_id: conversationIdRef.current || undefined,
+          user: "operator",
+        }),
+      });
+
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const data = await res.json();
+      if (data.conversation_id) {
+        conversationIdRef.current = data.conversation_id;
+      }
+      setAiResponse(data.answer || "回答を取得できませんでした。");
+    } catch (err) {
+      console.error("Dify API error:", err);
+      setAiResponse("APIエラーが発生しました。接続を確認してください。");
+    } finally {
+      setAiLoading(false);
+    }
+  }, []);
+
+  const scheduleDifyCall = useCallback((lines) => {
+    clearTimeout(difyTimerRef.current);
+    const fullText = lines.map(l => l.text).join("\n");
+    difyTimerRef.current = setTimeout(() => callDifyAPI(fullText), 2000);
+  }, [callDifyAPI]);
+
   const addLine = (text) => {
     setTranscript(prev => {
       const lines = [...prev, { id: Date.now() + Math.random(), text, ts: new Date().toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit",second:"2-digit"}) }];
@@ -112,17 +162,73 @@ export default function App() {
       const found = searchKB(fullText);
       if (found) {
         setAnimateResult(false);
-        setTimeout(() => { setResult(found); setAnimateResult(true); }, 50);
+        setTimeout(() => { setKbResult(found); setAnimateResult(true); }, 50);
       }
+      scheduleDifyCall(lines);
       return lines;
     });
+  };
+
+  const startSpeechRecognition = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) return;
+
+    const recognition = new SpeechRecognition();
+    recognition.lang = "ja-JP";
+    recognition.continuous = true;
+    recognition.interimResults = false;
+
+    recognition.onresult = (event) => {
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        if (event.results[i].isFinal) {
+          addLine(event.results[i][0].transcript);
+        }
+      }
+    };
+
+    recognition.onerror = (event) => {
+      if (event.error === "not-allowed") {
+        setIsListening(false);
+      }
+    };
+
+    recognition.onend = () => {
+      if (recognitionRef.current) {
+        try { recognitionRef.current.start(); } catch {}
+      }
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  const stopSpeechRecognition = () => {
+    if (recognitionRef.current) {
+      const ref = recognitionRef.current;
+      recognitionRef.current = null;
+      ref.stop();
+    }
+  };
+
+  const startCall = () => {
+    setCallActive(true);
+    setIsListening(true);
+    setTranscript([]);
+    setKbResult(null);
+    setAiResponse("");
+    conversationIdRef.current = "";
+    lastSentRef.current = "";
+    startSpeechRecognition();
   };
 
   const startDemo = () => {
     setCallActive(true);
     setIsListening(true);
     setTranscript([]);
-    setResult(null);
+    setKbResult(null);
+    setAiResponse("");
+    conversationIdRef.current = "";
+    lastSentRef.current = "";
     let cumDelay = 500;
     DEMO_SCRIPT.forEach(({ delay, text }) => {
       cumDelay += delay;
@@ -134,6 +240,8 @@ export default function App() {
     setCallActive(false);
     setIsListening(false);
     clearTimeout(demoRef.current);
+    clearTimeout(difyTimerRef.current);
+    stopSpeechRecognition();
   };
 
   const handleManualSearch = () => {
@@ -210,7 +318,6 @@ export default function App() {
           display: "flex",
           flexDirection: "column",
         }}>
-          {/* Panel Header */}
           <div style={{
             padding: "14px 20px 12px",
             borderBottom: "1px solid rgba(255,255,255,0.06)",
@@ -236,7 +343,6 @@ export default function App() {
             )}
           </div>
 
-          {/* Transcript Lines */}
           <div ref={transcriptRef} style={{
             flex: 1,
             overflowY: "auto",
@@ -286,7 +392,7 @@ export default function App() {
             borderTop: "1px solid rgba(255,255,255,0.06)",
           }}>
             <div style={{ fontSize: 10, color: "#8892a4", marginBottom: 8, letterSpacing: "0.08em" }}>
-              ▌ キーワード手動検索
+              ▌ キーワード手動入力
             </div>
             <div style={{ display: "flex", gap: 8 }}>
               <input
@@ -317,18 +423,17 @@ export default function App() {
                   fontSize: 12,
                   fontWeight: 700,
                 }}
-              >検索</button>
+              >送信</button>
             </div>
           </div>
         </div>
 
-        {/* Center: KB Quick Answer Panel */}
+        {/* Right: AI Guide Panel */}
         <div style={{
           flex: 1,
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          borderRight: "1px solid rgba(255,255,255,0.07)",
         }}>
           <div style={{
             padding: "14px 20px 12px",
@@ -338,25 +443,32 @@ export default function App() {
             justifyContent: "space-between",
           }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "#8892a4" }}>
-              ▌ クイックガイド
+              ▌ AIアシスト — 対応ガイド
             </div>
-            {result && (
-              <span style={{
-                background: "rgba(255,183,77,0.15)",
-                border: "1px solid rgba(255,183,77,0.35)",
-                borderRadius: 20,
-                padding: "3px 12px",
-                fontSize: 11,
-                color: "#ffb74d",
-                fontWeight: 700,
-              }}>
-                {result.category}
-              </span>
-            )}
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              {kbResult && (
+                <span style={{
+                  background: "rgba(255,183,77,0.15)",
+                  border: "1px solid rgba(255,183,77,0.35)",
+                  borderRadius: 20,
+                  padding: "3px 12px",
+                  fontSize: 11,
+                  color: "#ffb74d",
+                  fontWeight: 700,
+                }}>
+                  {kbResult.category}
+                </span>
+              )}
+              {aiLoading && (
+                <span style={{ fontSize: 10, color: "#64b5f6", animation: "blink 1s infinite" }}>
+                  AI分析中...
+                </span>
+              )}
+            </div>
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-            {!result ? (
+            {!kbResult && !aiResponse ? (
               <div style={{
                 height: "100%",
                 display: "flex",
@@ -368,135 +480,133 @@ export default function App() {
               }}>
                 <div style={{ fontSize: 40 }}>🔍</div>
                 <div style={{ fontSize: 12, textAlign: "center", lineHeight: 2 }}>
-                  通話内容を認識すると<br/>ここに案内手順が自動表示されます
+                  通話内容を認識すると<br/>ここに対応ガイドが自動表示されます
                 </div>
               </div>
             ) : (
-              <div style={{
-                animation: animateResult ? "fadeSlideIn 0.4s ease" : "none",
-              }}>
-                {/* Steps */}
-                <div style={{ marginBottom: 20 }}>
-                  <div style={{ fontSize: 11, color: "#8892a4", letterSpacing: "0.1em", marginBottom: 12 }}>
-                    対応ステップ
-                  </div>
-                  {result.steps.map((step, i) => (
-                    <div key={i} style={{
-                      display: "flex",
-                      gap: 14,
-                      marginBottom: 12,
-                      animation: `fadeSlideIn 0.3s ease ${i * 0.08}s both`,
-                    }}>
-                      <div style={{
-                        width: 28, height: 28,
-                        borderRadius: "50%",
-                        background: "linear-gradient(135deg, #ffb74d22, #ff8f0022)",
-                        border: "1.5px solid #ffb74d66",
-                        display: "flex", alignItems: "center", justifyContent: "center",
-                        flexShrink: 0,
-                        fontSize: 12, fontWeight: 800, color: "#ffb74d",
+              <div>
+                {/* KB Quick Result */}
+                {kbResult && (
+                  <div style={{
+                    animation: animateResult ? "fadeSlideIn 0.4s ease" : "none",
+                    marginBottom: 24,
+                  }}>
+                    <div style={{ fontSize: 11, color: "#8892a4", letterSpacing: "0.1em", marginBottom: 12 }}>
+                      クイックガイド
+                    </div>
+                    {kbResult.steps.map((step, i) => (
+                      <div key={i} style={{
+                        display: "flex",
+                        gap: 14,
+                        marginBottom: 10,
+                        animation: `fadeSlideIn 0.3s ease ${i * 0.08}s both`,
                       }}>
-                        {i + 1}
+                        <div style={{
+                          width: 24, height: 24,
+                          borderRadius: "50%",
+                          background: "linear-gradient(135deg, #ffb74d22, #ff8f0022)",
+                          border: "1.5px solid #ffb74d66",
+                          display: "flex", alignItems: "center", justifyContent: "center",
+                          flexShrink: 0,
+                          fontSize: 11, fontWeight: 800, color: "#ffb74d",
+                        }}>
+                          {i + 1}
+                        </div>
+                        <div style={{
+                          background: "rgba(255,255,255,0.03)",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                          borderRadius: 10,
+                          padding: "8px 12px",
+                          fontSize: 13,
+                          lineHeight: 1.7,
+                          flex: 1,
+                          color: "#d0d8e8",
+                        }}>
+                          {step}
+                        </div>
                       </div>
-                      <div style={{
-                        background: "rgba(255,255,255,0.03)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        borderRadius: 10,
-                        padding: "10px 14px",
-                        fontSize: 13,
-                        lineHeight: 1.7,
-                        flex: 1,
-                        color: "#d0d8e8",
-                      }}>
-                        {step}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Tip */}
-                <div style={{
-                  background: "rgba(100,181,246,0.06)",
-                  border: "1px solid rgba(100,181,246,0.2)",
-                  borderRadius: 12,
-                  padding: "14px 16px",
-                  display: "flex",
-                  gap: 12,
-                }}>
-                  <div style={{ fontSize: 18, flexShrink: 0 }}>💡</div>
-                  <div>
-                    <div style={{ fontSize: 10, color: "#64b5f6", fontWeight: 700, marginBottom: 5, letterSpacing: "0.1em" }}>
-                      対応のヒント
-                    </div>
-                    <div style={{ fontSize: 13, color: "#90caf9", lineHeight: 1.8 }}>
-                      {result.tip}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Quick Tags */}
-                <div style={{ marginTop: 20 }}>
-                  <div style={{ fontSize: 11, color: "#8892a4", letterSpacing: "0.1em", marginBottom: 10 }}>
-                    関連カテゴリ
-                  </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                    {MOCK_KB.map(item => (
-                      <button
-                        key={item.category}
-                        onClick={() => {
-                          setAnimateResult(false);
-                          setTimeout(() => { setResult(item); setAnimateResult(true); }, 50);
-                        }}
-                        style={{
-                          background: result.category === item.category
-                            ? "rgba(255,183,77,0.2)"
-                            : "rgba(255,255,255,0.04)",
-                          border: result.category === item.category
-                            ? "1px solid rgba(255,183,77,0.5)"
-                            : "1px solid rgba(255,255,255,0.1)",
-                          borderRadius: 20,
-                          padding: "5px 14px",
-                          fontSize: 12,
-                          color: result.category === item.category ? "#ffb74d" : "#8892a4",
-                          cursor: "pointer",
-                          transition: "all 0.2s",
-                        }}
-                      >
-                        {item.category}
-                      </button>
                     ))}
+
+                    <div style={{
+                      background: "rgba(100,181,246,0.06)",
+                      border: "1px solid rgba(100,181,246,0.2)",
+                      borderRadius: 12,
+                      padding: "12px 14px",
+                      display: "flex",
+                      gap: 10,
+                      marginTop: 12,
+                    }}>
+                      <div style={{ fontSize: 16, flexShrink: 0 }}>💡</div>
+                      <div style={{ fontSize: 12, color: "#90caf9", lineHeight: 1.8 }}>
+                        {kbResult.tip}
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
+                      {MOCK_KB.map(item => (
+                        <button
+                          key={item.category}
+                          onClick={() => {
+                            setAnimateResult(false);
+                            setTimeout(() => { setKbResult(item); setAnimateResult(true); }, 50);
+                          }}
+                          style={{
+                            background: kbResult.category === item.category
+                              ? "rgba(255,183,77,0.2)"
+                              : "rgba(255,255,255,0.04)",
+                            border: kbResult.category === item.category
+                              ? "1px solid rgba(255,183,77,0.5)"
+                              : "1px solid rgba(255,255,255,0.1)",
+                            borderRadius: 20,
+                            padding: "4px 12px",
+                            fontSize: 11,
+                            color: kbResult.category === item.category ? "#ffb74d" : "#8892a4",
+                            cursor: "pointer",
+                            transition: "all 0.2s",
+                          }}
+                        >
+                          {item.category}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
+
+                {/* AI Response from Dify */}
+                {(aiResponse || aiLoading) && (
+                  <div style={{
+                    background: "rgba(76,175,80,0.04)",
+                    border: "1px solid rgba(76,175,80,0.15)",
+                    borderRadius: 14,
+                    padding: "18px 20px",
+                    animation: "fadeSlideIn 0.4s ease",
+                  }}>
+                    <div style={{
+                      fontSize: 11, color: "#4caf50", fontWeight: 700,
+                      letterSpacing: "0.1em", marginBottom: 12,
+                      display: "flex", alignItems: "center", gap: 8,
+                    }}>
+                      <span>🤖</span>
+                      <span>AI ナレッジ回答</span>
+                    </div>
+                    {aiLoading && !aiResponse ? (
+                      <div style={{ fontSize: 13, color: "#8892a4", animation: "blink 1s infinite" }}>
+                        ナレッジを検索中...
+                      </div>
+                    ) : (
+                      <div style={{
+                        fontSize: 14,
+                        lineHeight: 2,
+                        color: "#d0d8e8",
+                        whiteSpace: "pre-wrap",
+                      }}>
+                        {aiResponse}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        </div>
-
-        {/* Right: Dify Chatbot Panel */}
-        <div style={{
-          width: "35%",
-          display: "flex",
-          flexDirection: "column",
-          overflow: "hidden",
-        }}>
-          <div style={{
-            padding: "14px 20px 12px",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
-          }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "#8892a4" }}>
-              ▌ AIチャット — ナレッジ検索
-            </div>
-          </div>
-          <div style={{ flex: 1, overflow: "hidden" }}>
-            <iframe
-              src="https://udify.app/chatbot/vP3wxVY446NCbJf5"
-              style={{
-                width: "100%",
-                height: "100%",
-                border: "none",
-              }}
-              allow="microphone"
-            />
           </div>
         </div>
       </div>
@@ -515,20 +625,33 @@ export default function App() {
         </div>
         <div style={{ display: "flex", gap: 12 }}>
           {!callActive ? (
-            <button onClick={startDemo} style={{
-              background: "linear-gradient(135deg, #4caf50, #2e7d32)",
-              border: "none",
-              borderRadius: 10,
-              padding: "10px 28px",
-              color: "#fff",
-              fontSize: 13,
-              fontWeight: 700,
-              cursor: "pointer",
-              letterSpacing: "0.05em",
-              boxShadow: "0 4px 20px rgba(76,175,80,0.3)",
-            }}>
-              📞 デモ通話開始
-            </button>
+            <>
+              <button onClick={startCall} style={{
+                background: "linear-gradient(135deg, #4caf50, #2e7d32)",
+                border: "none",
+                borderRadius: 10,
+                padding: "10px 28px",
+                color: "#fff",
+                fontSize: 13,
+                fontWeight: 700,
+                cursor: "pointer",
+                letterSpacing: "0.05em",
+                boxShadow: "0 4px 20px rgba(76,175,80,0.3)",
+              }}>
+                🎙️ 通話開始（音声認識）
+              </button>
+              <button onClick={startDemo} style={{
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.15)",
+                borderRadius: 10,
+                padding: "10px 20px",
+                color: "#8892a4",
+                fontSize: 13,
+                cursor: "pointer",
+              }}>
+                📞 デモ
+              </button>
+            </>
           ) : (
             <button onClick={endCall} style={{
               background: "linear-gradient(135deg, #ef5350, #b71c1c)",
@@ -545,7 +668,7 @@ export default function App() {
               📵 通話終了
             </button>
           )}
-          <button onClick={() => { setTranscript([]); setResult(null); }} style={{
+          <button onClick={() => { setTranscript([]); setKbResult(null); setAiResponse(""); conversationIdRef.current = ""; lastSentRef.current = ""; }} style={{
             background: "rgba(255,255,255,0.06)",
             border: "1px solid rgba(255,255,255,0.1)",
             borderRadius: 10,
