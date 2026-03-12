@@ -81,7 +81,37 @@ const DEMO_SCRIPT = [
   { delay: 1100, text: "インターネットが全然繋がらないんです" },
 ];
 
+const SESSION_KEY = "operator_session";
+const SESSION_TTL = 6 * 60 * 60 * 1000; // 6時間
+
+function loadSession() {
+  try {
+    const raw = localStorage.getItem(SESSION_KEY);
+    if (!raw) return null;
+    const session = JSON.parse(raw);
+    if (Date.now() - session.timestamp > SESSION_TTL) {
+      localStorage.removeItem(SESSION_KEY);
+      return null;
+    }
+    return session.name;
+  } catch {
+    return null;
+  }
+}
+
+function saveSession(name) {
+  localStorage.setItem(SESSION_KEY, JSON.stringify({ name, timestamp: Date.now() }));
+}
+
+function clearSession() {
+  localStorage.removeItem(SESSION_KEY);
+}
+
 export default function App() {
+  const [operatorName, setOperatorName] = useState(() => loadSession() || "");
+  const [loginInput, setLoginInput] = useState("");
+  const isLoggedIn = !!operatorName;
+
   const [transcript, setTranscript] = useState([]);
   const [kbResult, setKbResult] = useState(null);
   const [aiResponse, setAiResponse] = useState("");
@@ -512,7 +542,7 @@ ${fullText}`,
         category: summary.category || "その他",
         summary: summary.summary || "",
         callback_number: summary.callback_number || "",
-        operator: "",
+        operator: operatorName,
       });
       setSaveStatus("");
       setShowSummaryModal(true);
@@ -531,11 +561,114 @@ ${fullText}`,
     setEditableSummary(prev => ({ ...prev, [field]: value }));
   };
 
+  const handleLogin = () => {
+    const name = loginInput.trim();
+    if (!name) return;
+    saveSession(name);
+    setOperatorName(name);
+    setLoginInput("");
+  };
+
+  const handleLogout = () => {
+    clearSession();
+    setOperatorName("");
+  };
+
   const handleManualSearch = () => {
     if (!inputText.trim()) return;
     addLine(inputText.trim());
     setInputText("");
   };
+
+  if (!isLoggedIn) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        background: "#0a0f1e",
+        fontFamily: "'Noto Sans JP', 'Hiragino Sans', sans-serif",
+        color: "#e8eaf0",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}>
+        <div style={{
+          background: "linear-gradient(135deg, #0d1535, #111d3d)",
+          border: "1px solid rgba(255,183,77,0.2)",
+          borderRadius: 20,
+          padding: "48px 40px",
+          width: "100%",
+          maxWidth: 380,
+          boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+          textAlign: "center",
+        }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 14,
+            background: "linear-gradient(135deg, #ffb74d, #ff8f00)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            fontSize: 28, margin: "0 auto 20px",
+          }}>📞</div>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#ffb74d", letterSpacing: "0.08em", marginBottom: 6 }}>
+            ASO NET
+          </div>
+          <div style={{ fontSize: 11, color: "#8892a4", letterSpacing: "0.05em", marginBottom: 32 }}>
+            OPERATOR ASSIST SYSTEM
+          </div>
+
+          <div style={{ textAlign: "left", marginBottom: 8 }}>
+            <label style={{ fontSize: 11, color: "#8892a4", letterSpacing: "0.08em" }}>
+              オペレーター名
+            </label>
+          </div>
+          <input
+            value={loginInput}
+            onChange={e => setLoginInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && handleLogin()}
+            placeholder="名前を入力してください"
+            autoFocus
+            style={{
+              width: "100%",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.15)",
+              borderRadius: 10,
+              padding: "12px 16px",
+              color: "#e8eaf0",
+              fontSize: 14,
+              outline: "none",
+              boxSizing: "border-box",
+              marginBottom: 20,
+            }}
+          />
+          <button
+            onClick={handleLogin}
+            disabled={!loginInput.trim()}
+            style={{
+              width: "100%",
+              background: loginInput.trim()
+                ? "linear-gradient(135deg, #ffb74d, #ff8f00)"
+                : "rgba(255,255,255,0.08)",
+              border: "none",
+              borderRadius: 10,
+              padding: "12px 20px",
+              color: loginInput.trim() ? "#0a0f1e" : "#8892a4",
+              fontSize: 14,
+              fontWeight: 700,
+              cursor: loginInput.trim() ? "pointer" : "default",
+              letterSpacing: "0.05em",
+              transition: "all 0.2s",
+            }}
+          >
+            ログイン
+          </button>
+          <div style={{ fontSize: 10, color: "#4a5568", marginTop: 16 }}>
+            ログイン状態は6時間保持されます
+          </div>
+        </div>
+        <style>{`
+          input::placeholder { color: #4a5568; }
+        `}</style>
+      </div>
+    );
+  }
 
   return (
     <div style={{
@@ -590,6 +723,22 @@ ${fullText}`,
           )}
           <div style={{ fontSize: 11, color: "#8892a4" }}>
             {new Date().toLocaleDateString("ja-JP", { year:"numeric", month:"long", day:"numeric", weekday:"short" })}
+          </div>
+          <div style={{
+            display: "flex", alignItems: "center", gap: 8,
+            borderLeft: "1px solid rgba(255,255,255,0.1)",
+            paddingLeft: 16,
+          }}>
+            <span style={{ fontSize: 12, color: "#e8eaf0" }}>{operatorName}</span>
+            <button onClick={handleLogout} style={{
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 6,
+              padding: "3px 10px",
+              color: "#8892a4",
+              fontSize: 10,
+              cursor: "pointer",
+            }}>ログアウト</button>
           </div>
         </div>
       </header>
