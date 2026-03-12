@@ -281,12 +281,16 @@ ${fullText}`,
 
     setSaveStatus("saving");
     try {
-      const res = await fetch(GAS_WEBHOOK_URL, {
+      // GASはCORSプリフライトに非対応のため、no-corsモードで送信
+      // text/plainにすることでプリフライトを回避
+      await fetch(GAS_WEBHOOK_URL, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain" },
         body: JSON.stringify(data),
       });
-      return res.ok;
+      // no-corsモードではレスポンスが不透明になるため、送信成功とみなす
+      return true;
     } catch (err) {
       console.error("Spreadsheet save error:", err);
       return false;
