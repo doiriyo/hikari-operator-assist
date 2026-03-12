@@ -204,7 +204,8 @@ export default function App() {
 
         {/* Left: Transcript Panel */}
         <div style={{
-          width: "42%",
+          width: "30%",
+          minWidth: 300,
           borderRight: "1px solid rgba(255,255,255,0.07)",
           display: "flex",
           flexDirection: "column",
@@ -321,12 +322,13 @@ export default function App() {
           </div>
         </div>
 
-        {/* Right: AI Answer Panel */}
+        {/* Center: KB Quick Answer Panel */}
         <div style={{
           flex: 1,
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          borderRight: "1px solid rgba(255,255,255,0.07)",
         }}>
           <div style={{
             padding: "14px 20px 12px",
@@ -336,7 +338,7 @@ export default function App() {
             justifyContent: "space-between",
           }}>
             <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "#8892a4" }}>
-              ▌ AIアシスト — 案内手順
+              ▌ クイックガイド
             </div>
             {result && (
               <span style={{
@@ -467,6 +469,34 @@ export default function App() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Right: Dify Chatbot Panel */}
+        <div style={{
+          width: "35%",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}>
+          <div style={{
+            padding: "14px 20px 12px",
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "#8892a4" }}>
+              ▌ AIチャット — ナレッジ検索
+            </div>
+          </div>
+          <div style={{ flex: 1, overflow: "hidden" }}>
+            <iframe
+              src="https://udify.app/chatbot/vP3wxVY446NCbJf5"
+              style={{
+                width: "100%",
+                height: "100%",
+                border: "none",
+              }}
+              allow="microphone"
+            />
           </div>
         </div>
       </div>
