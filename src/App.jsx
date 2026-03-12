@@ -91,6 +91,7 @@ export default function App() {
   const [speechError, setSpeechError] = useState("");
   const [interimText, setInterimText] = useState("");
   const [speechDebug, setSpeechDebug] = useState([]);
+  const [micLevel, setMicLevel] = useState(0);
   const transcriptRef = useRef(null);
   const timerRef = useRef(null);
   const demoRef = useRef(null);
@@ -100,6 +101,8 @@ export default function App() {
   const recognitionRef = useRef(null);
   const restartAttemptsRef = useRef(0);
   const noSpeechCountRef = useRef(0);
+  const audioContextRef = useRef(null);
+  const micStreamRef = useRef(null);
 
   useEffect(() => {
     if (transcriptRef.current) {
@@ -300,6 +303,42 @@ export default function App() {
     }
   };
 
+  const startMicMonitor = async () => {
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      micStreamRef.current = stream;
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      audioContextRef.current = audioCtx;
+      const source = audioCtx.createMediaStreamSource(stream);
+      const analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 256;
+      source.connect(analyser);
+      const dataArray = new Uint8Array(analyser.frequencyBinCount);
+      const update = () => {
+        if (!micStreamRef.current) return;
+        analyser.getByteFrequencyData(dataArray);
+        const avg = dataArray.reduce((a, b) => a + b, 0) / dataArray.length;
+        setMicLevel(Math.min(100, Math.round(avg * 1.5)));
+        requestAnimationFrame(update);
+      };
+      update();
+    } catch {
+      setMicLevel(-1);
+    }
+  };
+
+  const stopMicMonitor = () => {
+    if (micStreamRef.current) {
+      micStreamRef.current.getTracks().forEach(t => t.stop());
+      micStreamRef.current = null;
+    }
+    if (audioContextRef.current) {
+      audioContextRef.current.close();
+      audioContextRef.current = null;
+    }
+    setMicLevel(0);
+  };
+
   const startCall = () => {
     setCallActive(true);
     setIsListening(true);
@@ -310,6 +349,7 @@ export default function App() {
     conversationIdRef.current = "";
     lastSentRef.current = "";
     startSpeechRecognition();
+    startMicMonitor();
   };
 
   const startDemo = () => {
@@ -333,6 +373,7 @@ export default function App() {
     setIsListening(false);
     setSpeechError("");
     setInterimText("");
+    stopMicMonitor();
     clearTimeout(demoRef.current);
     clearTimeout(difyTimerRef.current);
     stopSpeechRecognition();
@@ -454,7 +495,7 @@ export default function App() {
             </div>
           )}
 
-          {callActive && speechDebug.length > 0 && (
+          {callActive && (speechDebug.length > 0 || micLevel !== 0) && (
             <div style={{
               margin: "8px 16px 0",
               padding: "8px 10px",
@@ -465,10 +506,42 @@ export default function App() {
               fontFamily: "monospace",
               color: "#64b5f6",
               lineHeight: 1.6,
-              maxHeight: 120,
+              maxHeight: 160,
               overflowY: "auto",
             }}>
               <div style={{ fontWeight: 700, marginBottom: 4 }}>🔍 音声認識デバッグ</div>
+
+              {/* Mic Level Meter */}
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+                <span>🎤 Chrome入力レベル:</span>
+                {micLevel === -1 ? (
+                  <span style={{ color: "#ef5350" }}>マイク取得失敗</span>
+                ) : (
+                  <>
+                    <div style={{
+                      flex: 1,
+                      height: 8,
+                      background: "rgba(255,255,255,0.1)",
+                      borderRadius: 4,
+                      overflow: "hidden",
+                      maxWidth: 150,
+                    }}>
+                      <div style={{
+                        height: "100%",
+                        width: `${micLevel}%`,
+                        background: micLevel > 30 ? "#4caf50" : micLevel > 5 ? "#ffb74d" : "#ef5350",
+                        borderRadius: 4,
+                        transition: "width 0.1s",
+                      }}/>
+                    </div>
+                    <span>{micLevel}%</span>
+                    {micLevel <= 5 && (
+                      <span style={{ color: "#ef5350" }}>⚠ 無音</span>
+                    )}
+                  </>
+                )}
+              </div>
+
               {speechDebug.map((msg, i) => (
                 <div key={i}>{msg}</div>
               ))}
