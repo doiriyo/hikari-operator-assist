@@ -90,6 +90,7 @@ export default function App() {
   const [animateResult, setAnimateResult] = useState(false);
   const [speechError, setSpeechError] = useState("");
   const [interimText, setInterimText] = useState("");
+  const [speechDebug, setSpeechDebug] = useState([]);
   const transcriptRef = useRef(null);
   const timerRef = useRef(null);
   const demoRef = useRef(null);
@@ -183,28 +184,43 @@ export default function App() {
 
     setSpeechError("");
     setInterimText("");
+    setSpeechDebug([]);
     restartAttemptsRef.current = 0;
     noSpeechCountRef.current = 0;
+
+    const addDebug = (msg) => {
+      const ts = new Date().toLocaleTimeString("ja-JP", { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+      setSpeechDebug(prev => [...prev.slice(-19), `${ts} ${msg}`]);
+    };
 
     const recognition = new SpeechRecognition();
     recognition.lang = "ja-JP";
     recognition.continuous = true;
     recognition.interimResults = true;
 
+    recognition.onaudiostart = () => addDebug("✅ audiostart — マイク音声取得開始");
+    recognition.onaudioend = () => addDebug("⏹ audioend — マイク音声取得終了");
+    recognition.onspeechstart = () => addDebug("✅ speechstart — 音声検出");
+    recognition.onspeechend = () => addDebug("⏹ speechend — 音声終了");
+    recognition.onstart = () => addDebug("✅ start — 認識サービス開始");
+
     recognition.onresult = (event) => {
       restartAttemptsRef.current = 0;
       noSpeechCountRef.current = 0;
       for (let i = event.resultIndex; i < event.results.length; i++) {
         if (event.results[i].isFinal) {
+          addDebug(`📝 result(final): "${event.results[i][0].transcript}"`);
           setInterimText("");
           addLine(event.results[i][0].transcript);
         } else {
+          addDebug(`... result(interim): "${event.results[i][0].transcript}"`);
           setInterimText(event.results[i][0].transcript);
         }
       }
     };
 
     recognition.onerror = (event) => {
+      addDebug(`❌ error: ${event.error}`);
       switch (event.error) {
         case "not-allowed":
           setSpeechError(
@@ -244,6 +260,7 @@ export default function App() {
     };
 
     recognition.onend = () => {
+      addDebug("⏹ end — 認識サービス終了");
       setInterimText("");
       if (recognitionRef.current) {
         restartAttemptsRef.current += 1;
@@ -253,7 +270,10 @@ export default function App() {
           recognitionRef.current = null;
           return;
         }
-        try { recognitionRef.current.start(); } catch {
+        try {
+          recognitionRef.current.start();
+          addDebug(`🔄 restart (#${restartAttemptsRef.current})`);
+        } catch {
           setSpeechError("音声認識の再開に失敗しました。");
           setIsListening(false);
           recognitionRef.current = null;
@@ -264,6 +284,7 @@ export default function App() {
     recognitionRef.current = recognition;
     try {
       recognition.start();
+      addDebug("🎙️ recognition.start() 呼び出し成功");
     } catch (err) {
       setSpeechError(`音声認識の開始に失敗しました: ${err.message}`);
       setIsListening(false);
@@ -429,6 +450,27 @@ export default function App() {
             }}>
               ⚠ {speechError.split("\n").map((line, i) => (
                 <span key={i}>{i > 0 && <br/>}{line}</span>
+              ))}
+            </div>
+          )}
+
+          {callActive && speechDebug.length > 0 && (
+            <div style={{
+              margin: "8px 16px 0",
+              padding: "8px 10px",
+              background: "rgba(100,181,246,0.06)",
+              border: "1px solid rgba(100,181,246,0.2)",
+              borderRadius: 8,
+              fontSize: 10,
+              fontFamily: "monospace",
+              color: "#64b5f6",
+              lineHeight: 1.6,
+              maxHeight: 120,
+              overflowY: "auto",
+            }}>
+              <div style={{ fontWeight: 700, marginBottom: 4 }}>🔍 音声認識デバッグ</div>
+              {speechDebug.map((msg, i) => (
+                <div key={i}>{msg}</div>
               ))}
             </div>
           )}
