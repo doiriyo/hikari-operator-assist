@@ -89,6 +89,7 @@ export default function App() {
   const [inputText, setInputText] = useState("");
   const [animateResult, setAnimateResult] = useState(false);
   const [speechError, setSpeechError] = useState("");
+  const [interimText, setInterimText] = useState("");
   const transcriptRef = useRef(null);
   const timerRef = useRef(null);
   const demoRef = useRef(null);
@@ -97,6 +98,7 @@ export default function App() {
   const lastSentRef = useRef("");
   const recognitionRef = useRef(null);
   const restartAttemptsRef = useRef(0);
+  const noSpeechCountRef = useRef(0);
 
   useEffect(() => {
     if (transcriptRef.current) {
@@ -180,18 +182,24 @@ export default function App() {
     }
 
     setSpeechError("");
+    setInterimText("");
     restartAttemptsRef.current = 0;
+    noSpeechCountRef.current = 0;
 
     const recognition = new SpeechRecognition();
     recognition.lang = "ja-JP";
     recognition.continuous = true;
-    recognition.interimResults = false;
+    recognition.interimResults = true;
 
     recognition.onresult = (event) => {
       restartAttemptsRef.current = 0;
+      noSpeechCountRef.current = 0;
       for (let i = event.resultIndex; i < event.results.length; i++) {
         if (event.results[i].isFinal) {
+          setInterimText("");
           addLine(event.results[i][0].transcript);
+        } else {
+          setInterimText(event.results[i][0].transcript);
         }
       }
     };
@@ -199,12 +207,19 @@ export default function App() {
     recognition.onerror = (event) => {
       switch (event.error) {
         case "not-allowed":
-          setSpeechError("マイクへのアクセスが拒否されました。ブラウザの設定でマイクを許可してください。");
+          setSpeechError(
+            "マイクへのアクセスが拒否されました。\n" +
+            "① Chromeのアドレスバー左の鍵アイコン → マイクを「許可」\n" +
+            "② macOS: システム設定 → プライバシーとセキュリティ → マイク → Chromeにチェック"
+          );
           setIsListening(false);
           recognitionRef.current = null;
           break;
         case "audio-capture":
-          setSpeechError("マイクが検出されません。マイクが接続されているか確認してください。");
+          setSpeechError(
+            "マイクが検出されません。\n" +
+            "macOS: システム設定 → サウンド → 入力で「MacBook Proのマイク」が選択されているか確認してください。"
+          );
           setIsListening(false);
           recognitionRef.current = null;
           break;
@@ -212,7 +227,15 @@ export default function App() {
           setSpeechError("音声認識サーバーに接続できません。ネットワーク接続を確認してください。");
           break;
         case "no-speech":
-          // 無音状態 — 自動リスタートに任せるのでエラー表示しない
+          noSpeechCountRef.current += 1;
+          if (noSpeechCountRef.current >= 3) {
+            setSpeechError(
+              "マイクからの音声が検出されません。以下を確認してください：\n" +
+              "① macOS: システム設定 → プライバシーとセキュリティ → マイク → Chromeが許可されているか\n" +
+              "② macOS: システム設定 → サウンド → 入力 → 入力レベルが反応しているか\n" +
+              "③ Chromeのタブがミュートされていないか"
+            );
+          }
           break;
         default:
           setSpeechError(`音声認識エラー: ${event.error}`);
@@ -221,9 +244,10 @@ export default function App() {
     };
 
     recognition.onend = () => {
+      setInterimText("");
       if (recognitionRef.current) {
         restartAttemptsRef.current += 1;
-        if (restartAttemptsRef.current > 5) {
+        if (restartAttemptsRef.current > 30) {
           setSpeechError("音声認識が繰り返し停止しました。通話を終了して再度開始してください。");
           setIsListening(false);
           recognitionRef.current = null;
@@ -287,6 +311,7 @@ export default function App() {
     setCallActive(false);
     setIsListening(false);
     setSpeechError("");
+    setInterimText("");
     clearTimeout(demoRef.current);
     clearTimeout(difyTimerRef.current);
     stopSpeechRecognition();
@@ -402,7 +427,9 @@ export default function App() {
               color: "#ef5350",
               lineHeight: 1.6,
             }}>
-              ⚠ {speechError}
+              ⚠ {speechError.split("\n").map((line, i) => (
+                <span key={i}>{i > 0 && <br/>}{line}</span>
+              ))}
             </div>
           )}
 
@@ -411,7 +438,7 @@ export default function App() {
             overflowY: "auto",
             padding: "16px 20px",
           }}>
-            {transcript.length === 0 ? (
+            {transcript.length === 0 && !interimText ? (
               <div style={{
                 height: "100%",
                 display: "flex",
@@ -426,27 +453,50 @@ export default function App() {
                   通話開始でリアルタイムに<br/>テキストが表示されます
                 </div>
               </div>
-            ) : transcript.map((line) => (
-              <div key={line.id} style={{
-                marginBottom: 14,
-                animation: "fadeSlideIn 0.3s ease",
-              }}>
-                <div style={{ fontSize: 10, color: "#8892a4", marginBottom: 4 }}>
-                  {line.ts} — お客様
-                </div>
-                <div style={{
-                  background: "rgba(255,183,77,0.06)",
-                  border: "1px solid rgba(255,183,77,0.15)",
-                  borderRadius: 10,
-                  padding: "10px 14px",
-                  fontSize: 14,
-                  lineHeight: 1.7,
-                  color: "#e8eaf0",
-                }}>
-                  {line.text}
-                </div>
-              </div>
-            ))}
+            ) : (
+              <>
+                {transcript.map((line) => (
+                  <div key={line.id} style={{
+                    marginBottom: 14,
+                    animation: "fadeSlideIn 0.3s ease",
+                  }}>
+                    <div style={{ fontSize: 10, color: "#8892a4", marginBottom: 4 }}>
+                      {line.ts} — お客様
+                    </div>
+                    <div style={{
+                      background: "rgba(255,183,77,0.06)",
+                      border: "1px solid rgba(255,183,77,0.15)",
+                      borderRadius: 10,
+                      padding: "10px 14px",
+                      fontSize: 14,
+                      lineHeight: 1.7,
+                      color: "#e8eaf0",
+                    }}>
+                      {line.text}
+                    </div>
+                  </div>
+                ))}
+                {interimText && (
+                  <div style={{ marginBottom: 14 }}>
+                    <div style={{ fontSize: 10, color: "#8892a4", marginBottom: 4 }}>
+                      認識中...
+                    </div>
+                    <div style={{
+                      background: "rgba(255,183,77,0.03)",
+                      border: "1px dashed rgba(255,183,77,0.2)",
+                      borderRadius: 10,
+                      padding: "10px 14px",
+                      fontSize: 14,
+                      lineHeight: 1.7,
+                      color: "#8892a4",
+                      fontStyle: "italic",
+                    }}>
+                      {interimText}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
           </div>
 
           {/* Manual Input */}
