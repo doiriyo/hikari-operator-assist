@@ -234,7 +234,7 @@ ${fullText}`,
     }
   }, []);
 
-  const saveToSpreadsheet = useCallback(async (summary, transcriptLines, durationSec) => {
+  const saveToSpreadsheet = useCallback(async (summary) => {
     if (!GAS_WEBHOOK_URL) {
       console.warn("GAS_WEBHOOK_URL が未設定です。ローカル保存のみ行います。");
       return false;
@@ -247,16 +247,11 @@ ${fullText}`,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           timestamp: new Date().toISOString(),
-          duration: durationSec,
           caller_name: summary.caller_name,
           category: summary.category,
           summary: summary.summary,
-          callback_needed: summary.callback_needed,
           callback_number: summary.callback_number,
-          callback_reason: summary.callback_reason,
-          urgency: summary.urgency,
-          action_items: (summary.action_items || []).join(" / "),
-          full_transcript: transcriptLines.map(l => `[${l.ts}] ${l.text}`).join("\n"),
+          operator: "", // 受領者（必要に応じて設定）
         }),
       });
       return res.ok;
@@ -493,7 +488,6 @@ ${fullText}`,
 
   const endCall = async () => {
     const currentTranscript = [...transcript];
-    const currentElapsed = elapsed;
 
     setCallActive(false);
     setIsListening(false);
@@ -510,7 +504,7 @@ ${fullText}`,
     const summary = await summarizeCall(currentTranscript);
     if (summary) {
       setCallSummary(summary);
-      const saved = await saveToSpreadsheet(summary, currentTranscript, currentElapsed);
+      const saved = await saveToSpreadsheet(summary);
       setSaveStatus(saved ? "saved" : (GAS_WEBHOOK_URL ? "error" : "saved"));
     } else {
       setSaveStatus("error");
