@@ -98,6 +98,15 @@ export default function App() {
   const [debugMode, setDebugMode] = useState(false);
   const [saveStatus, setSaveStatus] = useState(""); // "" | "summarizing" | "saving" | "saved" | "error"
   const [callSummary, setCallSummary] = useState(null);
+  const [showSummaryModal, setShowSummaryModal] = useState(false);
+  const [editableSummary, setEditableSummary] = useState({
+    timestamp: "",
+    caller_name: "",
+    category: "",
+    summary: "",
+    callback_number: "",
+    operator: "",
+  });
   const debugModeRef = useRef(false);
   const transcriptRef = useRef(null);
   const timerRef = useRef(null);
@@ -234,9 +243,9 @@ ${fullText}`,
     }
   }, []);
 
-  const saveToSpreadsheet = useCallback(async (summary) => {
+  const saveToSpreadsheet = useCallback(async (data) => {
     if (!GAS_WEBHOOK_URL) {
-      console.warn("GAS_WEBHOOK_URL が未設定です。ローカル保存のみ行います。");
+      console.warn("GAS_WEBHOOK_URL が未設定です。");
       return false;
     }
 
@@ -245,14 +254,7 @@ ${fullText}`,
       const res = await fetch(GAS_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          timestamp: new Date().toISOString(),
-          caller_name: summary.caller_name,
-          category: summary.category,
-          summary: summary.summary,
-          callback_number: summary.callback_number,
-          operator: "", // 受領者（必要に応じて設定）
-        }),
+        body: JSON.stringify(data),
       });
       return res.ok;
     } catch (err) {
@@ -500,15 +502,33 @@ ${fullText}`,
 
     if (currentTranscript.length === 0) return;
 
-    // 通話要約を生成して保存
+    // 通話要約を生成してモーダルに表示
     const summary = await summarizeCall(currentTranscript);
     if (summary) {
       setCallSummary(summary);
-      const saved = await saveToSpreadsheet(summary);
-      setSaveStatus(saved ? "saved" : (GAS_WEBHOOK_URL ? "error" : "saved"));
-    } else {
-      setSaveStatus("error");
+      setEditableSummary({
+        timestamp: new Date().toLocaleString("ja-JP"),
+        caller_name: summary.caller_name || "不明",
+        category: summary.category || "その他",
+        summary: summary.summary || "",
+        callback_number: summary.callback_number || "",
+        operator: "",
+      });
+      setSaveStatus("");
+      setShowSummaryModal(true);
     }
+  };
+
+  const handleSaveSummary = async () => {
+    const saved = await saveToSpreadsheet(editableSummary);
+    setSaveStatus(saved ? "saved" : (GAS_WEBHOOK_URL ? "error" : "saved"));
+    if (saved || !GAS_WEBHOOK_URL) {
+      setTimeout(() => setShowSummaryModal(false), 1200);
+    }
+  };
+
+  const handleEditField = (field, value) => {
+    setEditableSummary(prev => ({ ...prev, [field]: value }));
   };
 
   const handleManualSearch = () => {
@@ -1053,6 +1073,246 @@ ${fullText}`,
         </div>
       </div>
 
+      {/* Call Summary Modal */}
+      {showSummaryModal && (
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.6)",
+          backdropFilter: "blur(4px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 1000,
+          animation: "fadeSlideIn 0.3s ease",
+        }}>
+          <div style={{
+            background: "#111d3d",
+            border: "1px solid rgba(255,183,77,0.25)",
+            borderRadius: 16,
+            width: "90%",
+            maxWidth: 520,
+            maxHeight: "85vh",
+            overflowY: "auto",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+          }}>
+            {/* Modal Header */}
+            <div style={{
+              padding: "18px 24px 14px",
+              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 18 }}>📋</span>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#ffb74d", letterSpacing: "0.05em" }}>
+                  通話記録の保存
+                </span>
+              </div>
+              <button
+                onClick={() => setShowSummaryModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#8892a4",
+                  fontSize: 18,
+                  cursor: "pointer",
+                  padding: "4px 8px",
+                }}
+              >✕</button>
+            </div>
+
+            {/* Status Banner */}
+            {saveStatus === "summarizing" && (
+              <div style={{
+                margin: "12px 24px 0",
+                padding: "8px 14px",
+                background: "rgba(100,181,246,0.08)",
+                border: "1px solid rgba(100,181,246,0.25)",
+                borderRadius: 8,
+                fontSize: 12,
+                color: "#64b5f6",
+                animation: "blink 1s infinite",
+              }}>
+                AI が通話内容を分析中...
+              </div>
+            )}
+            {saveStatus === "saved" && (
+              <div style={{
+                margin: "12px 24px 0",
+                padding: "8px 14px",
+                background: "rgba(76,175,80,0.08)",
+                border: "1px solid rgba(76,175,80,0.25)",
+                borderRadius: 8,
+                fontSize: 12,
+                color: "#4caf50",
+              }}>
+                保存しました
+              </div>
+            )}
+            {saveStatus === "error" && (
+              <div style={{
+                margin: "12px 24px 0",
+                padding: "8px 14px",
+                background: "rgba(239,83,80,0.08)",
+                border: "1px solid rgba(239,83,80,0.25)",
+                borderRadius: 8,
+                fontSize: 12,
+                color: "#ef5350",
+              }}>
+                保存に失敗しました。再試行してください。
+              </div>
+            )}
+
+            {/* Editable Fields */}
+            <div style={{ padding: "16px 24px 20px" }}>
+              {[
+                { key: "timestamp", label: "タイムコード", icon: "🕐" },
+                { key: "caller_name", label: "名前", icon: "👤" },
+                { key: "category", label: "カテゴリー", icon: "📂", type: "select",
+                  options: ["接続障害","速度低下","料金・請求","解約・退会","機器設定","その他"] },
+                { key: "summary", label: "内容", icon: "📝", multiline: true },
+                { key: "callback_number", label: "電話番号", icon: "📞" },
+                { key: "operator", label: "受領者", icon: "🧑‍💼" },
+              ].map(({ key, label, icon, type, options, multiline }) => (
+                <div key={key} style={{ marginBottom: 14 }}>
+                  <label style={{
+                    fontSize: 11,
+                    color: "#8892a4",
+                    letterSpacing: "0.08em",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 6,
+                    marginBottom: 6,
+                  }}>
+                    <span>{icon}</span> {label}
+                  </label>
+                  {type === "select" ? (
+                    <select
+                      value={editableSummary[key]}
+                      onChange={e => handleEditField(key, e.target.value)}
+                      style={{
+                        width: "100%",
+                        background: "rgba(255,255,255,0.05)",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        borderRadius: 8,
+                        padding: "9px 12px",
+                        color: "#e8eaf0",
+                        fontSize: 13,
+                        outline: "none",
+                        appearance: "none",
+                      }}
+                    >
+                      {options.map(o => <option key={o} value={o} style={{ background: "#111d3d" }}>{o}</option>)}
+                    </select>
+                  ) : multiline ? (
+                    <textarea
+                      value={editableSummary[key]}
+                      onChange={e => handleEditField(key, e.target.value)}
+                      rows={3}
+                      style={{
+                        width: "100%",
+                        background: "rgba(255,255,255,0.05)",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        borderRadius: 8,
+                        padding: "9px 12px",
+                        color: "#e8eaf0",
+                        fontSize: 13,
+                        lineHeight: 1.7,
+                        outline: "none",
+                        resize: "vertical",
+                        fontFamily: "inherit",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  ) : (
+                    <input
+                      value={editableSummary[key]}
+                      onChange={e => handleEditField(key, e.target.value)}
+                      style={{
+                        width: "100%",
+                        background: "rgba(255,255,255,0.05)",
+                        border: "1px solid rgba(255,255,255,0.12)",
+                        borderRadius: 8,
+                        padding: "9px 12px",
+                        color: "#e8eaf0",
+                        fontSize: 13,
+                        outline: "none",
+                        boxSizing: "border-box",
+                      }}
+                    />
+                  )}
+                </div>
+              ))}
+
+              {/* Callback highlight */}
+              {callSummary && callSummary.callback_needed && (
+                <div style={{
+                  padding: "10px 14px",
+                  background: "rgba(255,183,77,0.08)",
+                  border: "1px solid rgba(255,183,77,0.3)",
+                  borderRadius: 10,
+                  marginBottom: 16,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                }}>
+                  <span style={{ fontSize: 16 }}>⚠️</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#ffb74d", marginBottom: 2 }}>
+                      折り返し連絡が必要です
+                    </div>
+                    {callSummary.callback_reason && (
+                      <div style={{ fontSize: 11, color: "#8892a4" }}>
+                        {callSummary.callback_reason}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 10, marginTop: 6 }}>
+                <button
+                  onClick={handleSaveSummary}
+                  disabled={saveStatus === "saving"}
+                  style={{
+                    flex: 1,
+                    background: "linear-gradient(135deg, #ffb74d, #ff8f00)",
+                    border: "none",
+                    borderRadius: 10,
+                    padding: "11px 20px",
+                    color: "#0a0f1e",
+                    fontSize: 13,
+                    fontWeight: 700,
+                    cursor: saveStatus === "saving" ? "wait" : "pointer",
+                    letterSpacing: "0.05em",
+                    opacity: saveStatus === "saving" ? 0.6 : 1,
+                  }}
+                >
+                  {saveStatus === "saving" ? "保存中..." : "📤 スプレッドシートに保存"}
+                </button>
+                <button
+                  onClick={() => setShowSummaryModal(false)}
+                  style={{
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.15)",
+                    borderRadius: 10,
+                    padding: "11px 18px",
+                    color: "#8892a4",
+                    fontSize: 13,
+                    cursor: "pointer",
+                  }}
+                >
+                  閉じる
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style>{`
         @keyframes pulse {
           0%, 100% { opacity: 1; transform: scale(1); }
@@ -1070,6 +1330,8 @@ ${fullText}`,
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
         input::placeholder { color: #4a5568; }
+        select::-ms-expand { display: none; }
+        textarea::placeholder { color: #4a5568; }
       `}</style>
     </div>
   );
