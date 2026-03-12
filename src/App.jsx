@@ -4,7 +4,7 @@ const DIFY_API_URL = "https://api.dify.ai/v1/chat-messages";
 const DIFY_API_KEY = "app-3FRus6A0PmVdDo8oFDT2r90G";
 
 // Google Apps Script Web App URL（デプロイ後に設定）
-const GAS_WEBHOOK_URL = "";
+const GAS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwQB3QO1AYO2TnkmnFQRugNGCEGwMj3x7ewBtDYzRbnpg3yfTVgngln99qv8xqenzjb/exec";
 
 const MOCK_KB = [
   {
