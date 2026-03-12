@@ -3,6 +3,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 const DIFY_API_URL = "https://api.dify.ai/v1/chat-messages";
 const DIFY_API_KEY = "app-3FRus6A0PmVdDo8oFDT2r90G";
 
+// Google Apps Script Web App URL（デプロイ後に設定）
+const GAS_WEBHOOK_URL = "";
+
 const MOCK_KB = [
   {
     keywords: ["繋がらない","接続できない","インターネット","ネット","切れる","切断"],
@@ -93,6 +96,8 @@ export default function App() {
   const [speechDebug, setSpeechDebug] = useState([]);
   const [micLevel, setMicLevel] = useState(0);
   const [debugMode, setDebugMode] = useState(false);
+  const [saveStatus, setSaveStatus] = useState(""); // "" | "summarizing" | "saving" | "saved" | "error"
+  const [callSummary, setCallSummary] = useState(null);
   const debugModeRef = useRef(false);
   const transcriptRef = useRef(null);
   const timerRef = useRef(null);
@@ -156,6 +161,108 @@ export default function App() {
       setAiResponse("APIエラーが発生しました。接続を確認してください。");
     } finally {
       setAiLoading(false);
+    }
+  }, []);
+
+  const summarizeCall = useCallback(async (lines) => {
+    const fullText = lines.map(l => `[${l.ts}] ${l.text}`).join("\n");
+    if (!fullText.trim()) return null;
+
+    setSaveStatus("summarizing");
+    try {
+      const res = await fetch(DIFY_API_URL, {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${DIFY_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          inputs: {},
+          query: `以下の通話記録を分析して、JSON形式で要約してください。必ず以下のキーを含めてください：
+- caller_name: お客様の名前（不明なら「不明」）
+- category: 問い合わせカテゴリ（接続障害/速度低下/料金・請求/解約・退会/機器設定/その他）
+- summary: 要件の要約（1〜2文）
+- callback_needed: 折り返し連絡が必要か（true/false）
+- callback_number: 折り返し先の電話番号（不明なら空文字）
+- callback_reason: 折り返しが必要な場合その理由（不要なら空文字）
+- urgency: 緊急度（高/中/低）
+- action_items: 対応が必要な事項のリスト（配列）
+
+JSON以外は出力しないでください。
+
+通話記録:
+${fullText}`,
+          response_mode: "blocking",
+          user: "operator",
+        }),
+      });
+
+      if (!res.ok) throw new Error(`API error: ${res.status}`);
+      const data = await res.json();
+      const answer = data.answer || "";
+
+      // JSONを抽出（```json ... ``` やプレーンJSON両方に対応）
+      const jsonMatch = answer.match(/```json\s*([\s\S]*?)```/) || answer.match(/(\{[\s\S]*\})/);
+      if (jsonMatch) {
+        const parsed = JSON.parse(jsonMatch[1]);
+        return parsed;
+      }
+      // パースできなかった場合はフォールバック
+      return {
+        caller_name: "不明",
+        category: "その他",
+        summary: lines.map(l => l.text).join(" "),
+        callback_needed: false,
+        callback_number: "",
+        callback_reason: "",
+        urgency: "中",
+        action_items: [],
+      };
+    } catch (err) {
+      console.error("Summary API error:", err);
+      // APIエラー時もフォールバック要約を返す
+      return {
+        caller_name: "不明",
+        category: "その他",
+        summary: lines.map(l => l.text).join(" "),
+        callback_needed: false,
+        callback_number: "",
+        callback_reason: "",
+        urgency: "中",
+        action_items: ["要約APIエラー — 手動確認が必要"],
+      };
+    }
+  }, []);
+
+  const saveToSpreadsheet = useCallback(async (summary, transcriptLines, durationSec) => {
+    if (!GAS_WEBHOOK_URL) {
+      console.warn("GAS_WEBHOOK_URL が未設定です。ローカル保存のみ行います。");
+      return false;
+    }
+
+    setSaveStatus("saving");
+    try {
+      const res = await fetch(GAS_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          timestamp: new Date().toISOString(),
+          duration: durationSec,
+          caller_name: summary.caller_name,
+          category: summary.category,
+          summary: summary.summary,
+          callback_needed: summary.callback_needed,
+          callback_number: summary.callback_number,
+          callback_reason: summary.callback_reason,
+          urgency: summary.urgency,
+          action_items: (summary.action_items || []).join(" / "),
+          full_transcript: transcriptLines.map(l => `[${l.ts}] ${l.text}`).join("\n"),
+        }),
+      });
+      return res.ok;
+    } catch (err) {
+      console.error("Spreadsheet save error:", err);
+      return false;
     }
   }, []);
 
@@ -384,7 +491,10 @@ export default function App() {
     });
   };
 
-  const endCall = () => {
+  const endCall = async () => {
+    const currentTranscript = [...transcript];
+    const currentElapsed = elapsed;
+
     setCallActive(false);
     setIsListening(false);
     setSpeechError("");
@@ -393,6 +503,18 @@ export default function App() {
     clearTimeout(demoRef.current);
     clearTimeout(difyTimerRef.current);
     stopSpeechRecognition();
+
+    if (currentTranscript.length === 0) return;
+
+    // 通話要約を生成して保存
+    const summary = await summarizeCall(currentTranscript);
+    if (summary) {
+      setCallSummary(summary);
+      const saved = await saveToSpreadsheet(summary, currentTranscript, currentElapsed);
+      setSaveStatus(saved ? "saved" : (GAS_WEBHOOK_URL ? "error" : "saved"));
+    } else {
+      setSaveStatus("error");
+    }
   };
 
   const handleManualSearch = () => {
