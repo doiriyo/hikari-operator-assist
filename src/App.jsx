@@ -92,6 +92,8 @@ export default function App() {
   const [interimText, setInterimText] = useState("");
   const [speechDebug, setSpeechDebug] = useState([]);
   const [micLevel, setMicLevel] = useState(0);
+  const [debugMode, setDebugMode] = useState(false);
+  const debugModeRef = useRef(false);
   const transcriptRef = useRef(null);
   const timerRef = useRef(null);
   const demoRef = useRef(null);
@@ -192,6 +194,7 @@ export default function App() {
     noSpeechCountRef.current = 0;
 
     const addDebug = (msg) => {
+      if (!debugModeRef.current) return;
       const ts = new Date().toLocaleTimeString("ja-JP", { hour:"2-digit", minute:"2-digit", second:"2-digit" });
       setSpeechDebug(prev => [...prev.slice(-19), `${ts} ${msg}`]);
     };
@@ -339,6 +342,19 @@ export default function App() {
     setMicLevel(0);
   };
 
+  const toggleDebug = () => {
+    const next = !debugMode;
+    setDebugMode(next);
+    debugModeRef.current = next;
+    if (next) {
+      setSpeechDebug([]);
+      if (callActive) startMicMonitor();
+    } else {
+      stopMicMonitor();
+      setSpeechDebug([]);
+    }
+  };
+
   const startCall = () => {
     setCallActive(true);
     setIsListening(true);
@@ -349,7 +365,7 @@ export default function App() {
     conversationIdRef.current = "";
     lastSentRef.current = "";
     startSpeechRecognition();
-    startMicMonitor();
+    if (debugModeRef.current) startMicMonitor();
   };
 
   const startDemo = () => {
@@ -495,7 +511,7 @@ export default function App() {
             </div>
           )}
 
-          {callActive && (speechDebug.length > 0 || micLevel !== 0) && (
+          {debugMode && callActive && (
             <div style={{
               margin: "8px 16px 0",
               padding: "8px 10px",
@@ -906,6 +922,17 @@ export default function App() {
             cursor: "pointer",
           }}>
             クリア
+          </button>
+          <button onClick={toggleDebug} style={{
+            background: debugMode ? "rgba(100,181,246,0.15)" : "rgba(255,255,255,0.06)",
+            border: debugMode ? "1px solid rgba(100,181,246,0.4)" : "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 10,
+            padding: "10px 14px",
+            color: debugMode ? "#64b5f6" : "#8892a4",
+            fontSize: 12,
+            cursor: "pointer",
+          }}>
+            🔧 デバッグ
           </button>
         </div>
       </div>
