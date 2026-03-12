@@ -88,6 +88,7 @@ export default function App() {
   const [elapsed, setElapsed] = useState(0);
   const [inputText, setInputText] = useState("");
   const [animateResult, setAnimateResult] = useState(false);
+  const [speechError, setSpeechError] = useState("");
   const transcriptRef = useRef(null);
   const timerRef = useRef(null);
   const demoRef = useRef(null);
@@ -95,6 +96,7 @@ export default function App() {
   const conversationIdRef = useRef("");
   const lastSentRef = useRef("");
   const recognitionRef = useRef(null);
+  const restartAttemptsRef = useRef(0);
 
   useEffect(() => {
     if (transcriptRef.current) {
@@ -171,7 +173,14 @@ export default function App() {
 
   const startSpeechRecognition = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SpeechRecognition) return;
+    if (!SpeechRecognition) {
+      setSpeechError("このブラウザは音声認識に対応していません。Google Chromeをご利用ください。");
+      setIsListening(false);
+      return;
+    }
+
+    setSpeechError("");
+    restartAttemptsRef.current = 0;
 
     const recognition = new SpeechRecognition();
     recognition.lang = "ja-JP";
@@ -179,6 +188,7 @@ export default function App() {
     recognition.interimResults = false;
 
     recognition.onresult = (event) => {
+      restartAttemptsRef.current = 0;
       for (let i = event.resultIndex; i < event.results.length; i++) {
         if (event.results[i].isFinal) {
           addLine(event.results[i][0].transcript);
@@ -187,19 +197,54 @@ export default function App() {
     };
 
     recognition.onerror = (event) => {
-      if (event.error === "not-allowed") {
-        setIsListening(false);
+      switch (event.error) {
+        case "not-allowed":
+          setSpeechError("マイクへのアクセスが拒否されました。ブラウザの設定でマイクを許可してください。");
+          setIsListening(false);
+          recognitionRef.current = null;
+          break;
+        case "audio-capture":
+          setSpeechError("マイクが検出されません。マイクが接続されているか確認してください。");
+          setIsListening(false);
+          recognitionRef.current = null;
+          break;
+        case "network":
+          setSpeechError("音声認識サーバーに接続できません。ネットワーク接続を確認してください。");
+          break;
+        case "no-speech":
+          // 無音状態 — 自動リスタートに任せるのでエラー表示しない
+          break;
+        default:
+          setSpeechError(`音声認識エラー: ${event.error}`);
+          break;
       }
     };
 
     recognition.onend = () => {
       if (recognitionRef.current) {
-        try { recognitionRef.current.start(); } catch {}
+        restartAttemptsRef.current += 1;
+        if (restartAttemptsRef.current > 5) {
+          setSpeechError("音声認識が繰り返し停止しました。通話を終了して再度開始してください。");
+          setIsListening(false);
+          recognitionRef.current = null;
+          return;
+        }
+        try { recognitionRef.current.start(); } catch {
+          setSpeechError("音声認識の再開に失敗しました。");
+          setIsListening(false);
+          recognitionRef.current = null;
+        }
       }
     };
 
     recognitionRef.current = recognition;
-    recognition.start();
+    try {
+      recognition.start();
+    } catch (err) {
+      setSpeechError(`音声認識の開始に失敗しました: ${err.message}`);
+      setIsListening(false);
+      recognitionRef.current = null;
+    }
   };
 
   const stopSpeechRecognition = () => {
@@ -216,6 +261,7 @@ export default function App() {
     setTranscript([]);
     setKbResult(null);
     setAiResponse("");
+    setSpeechError("");
     conversationIdRef.current = "";
     lastSentRef.current = "";
     startSpeechRecognition();
@@ -227,6 +273,7 @@ export default function App() {
     setTranscript([]);
     setKbResult(null);
     setAiResponse("");
+    setSpeechError("");
     conversationIdRef.current = "";
     lastSentRef.current = "";
     let cumDelay = 500;
@@ -239,6 +286,7 @@ export default function App() {
   const endCall = () => {
     setCallActive(false);
     setIsListening(false);
+    setSpeechError("");
     clearTimeout(demoRef.current);
     clearTimeout(difyTimerRef.current);
     stopSpeechRecognition();
@@ -342,6 +390,21 @@ export default function App() {
               </div>
             )}
           </div>
+
+          {speechError && (
+            <div style={{
+              margin: "0 16px",
+              padding: "8px 12px",
+              background: "rgba(239,83,80,0.1)",
+              border: "1px solid rgba(239,83,80,0.3)",
+              borderRadius: 8,
+              fontSize: 12,
+              color: "#ef5350",
+              lineHeight: 1.6,
+            }}>
+              ⚠ {speechError}
+            </div>
+          )}
 
           <div ref={transcriptRef} style={{
             flex: 1,
