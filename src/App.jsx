@@ -149,6 +149,10 @@ export default function App() {
   const noSpeechCountRef = useRef(0);
   const audioContextRef = useRef(null);
   const micStreamRef = useRef(null);
+  const callActiveRef = useRef(false);
+  const interimRef = useRef(""); // 中間テキスト保持用
+  const flushTimerRef = useRef(null); // 3秒強制確定タイマー
+  const lastFlushedRef = useRef(""); // 前回確定済みテキスト（重複防止）
 
   useEffect(() => {
     if (transcriptRef.current) {
@@ -348,17 +352,40 @@ ${fullText}`,
     recognition.onspeechend = () => addDebug("⏹ speechend — 音声終了");
     recognition.onstart = () => addDebug("✅ start — 認識サービス開始");
 
+    // 3秒ごとに中間テキストを強制確定する
+    const startFlushTimer = () => {
+      clearInterval(flushTimerRef.current);
+      flushTimerRef.current = setInterval(() => {
+        const text = interimRef.current.trim();
+        if (text && text !== lastFlushedRef.current) {
+          addDebug(`⏱ flush(3s): "${text}"`);
+          lastFlushedRef.current = text;
+          setInterimText("");
+          interimRef.current = "";
+          addLine(text);
+        }
+      }, 3000);
+    };
+    startFlushTimer();
+
     recognition.onresult = (event) => {
       restartAttemptsRef.current = 0;
       noSpeechCountRef.current = 0;
       for (let i = event.resultIndex; i < event.results.length; i++) {
         if (event.results[i].isFinal) {
-          addDebug(`📝 result(final): "${event.results[i][0].transcript}"`);
+          const finalText = event.results[i][0].transcript;
+          addDebug(`📝 result(final): "${finalText}"`);
+          // タイマーリセット＆中間テキストクリア
+          interimRef.current = "";
+          lastFlushedRef.current = "";
           setInterimText("");
-          addLine(event.results[i][0].transcript);
+          addLine(finalText);
+          startFlushTimer();
         } else {
-          addDebug(`... result(interim): "${event.results[i][0].transcript}"`);
-          setInterimText(event.results[i][0].transcript);
+          const interim = event.results[i][0].transcript;
+          addDebug(`... result(interim): "${interim}"`);
+          interimRef.current = interim;
+          setInterimText(interim);
         }
       }
     };
@@ -437,6 +464,10 @@ ${fullText}`,
   };
 
   const stopSpeechRecognition = () => {
+    clearInterval(flushTimerRef.current);
+    flushTimerRef.current = null;
+    interimRef.current = "";
+    lastFlushedRef.current = "";
     if (recognitionRef.current) {
       const ref = recognitionRef.current;
       recognitionRef.current = null;
@@ -480,6 +511,22 @@ ${fullText}`,
     setMicLevel(0);
   };
 
+  // ── F2キーで通話開始/終了トグル ──────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === "F2") {
+        e.preventDefault();
+        if (callActiveRef.current) {
+          endCall();
+        } else {
+          startCall();
+        }
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   const toggleDebug = () => {
     const next = !debugMode;
     setDebugMode(next);
@@ -495,6 +542,7 @@ ${fullText}`,
 
   const startCall = () => {
     setCallActive(true);
+    callActiveRef.current = true;
     setIsListening(true);
     setTranscript([]);
     setKbResult(null);
@@ -526,6 +574,7 @@ ${fullText}`,
     const currentTranscript = [...transcript];
 
     setCallActive(false);
+    callActiveRef.current = false;
     setIsListening(false);
     setSpeechError("");
     setInterimText("");
@@ -1154,7 +1203,7 @@ ${fullText}`,
         justifyContent: "space-between",
       }}>
         <div style={{ fontSize: 11, color: "#8892a4" }}>
-          {callActive ? `通話中 — テキスト ${transcript.length} 件認識` : "待機中"}
+          {callActive ? `通話中 — テキスト ${transcript.length} 件認識` : "待機中 — F2で通話開始"}
         </div>
         <div style={{ display: "flex", gap: 12 }}>
           {!callActive ? (
