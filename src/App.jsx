@@ -731,6 +731,7 @@ ${fullText}`,
       color: "#e8eaf0",
       display: "flex",
       flexDirection: "column",
+      paddingBottom: 60,
     }}>
       {/* Header */}
       <header style={{
@@ -1195,6 +1196,11 @@ ${fullText}`,
 
       {/* Footer Controls */}
       <div style={{
+        position: "fixed",
+        bottom: 0,
+        left: 0,
+        right: 0,
+        zIndex: 100,
         borderTop: "1px solid rgba(255,255,255,0.07)",
         background: "#0d1535",
         padding: "14px 24px",
