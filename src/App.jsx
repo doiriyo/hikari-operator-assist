@@ -4,7 +4,7 @@ const DIFY_API_URL = "https://api.dify.ai/v1/chat-messages";
 const DIFY_API_KEY = "app-3FRus6A0PmVdDo8oFDT2r90G";
 
 // Google Apps Script Web App URL（デプロイ後に設定）
-const GAS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwQB3QO1AYO2TnkmnFQRugNGCEGwMj3x7ewBtDYzRbnpg3yfTVgngln99qv8xqenzjb/exec";
+const GAS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbz-wn4RoV1AO7MPhjXuJikwOtcl40YNAW7sGKgTqcrVQ_npj_0Dl3VjaHZp_7rul9ie/exec";
 
 const MOCK_KB = [
   {
@@ -126,12 +126,6 @@ export default function App() {
   const [speechDebug, setSpeechDebug] = useState([]);
   const [micLevel, setMicLevel] = useState(0);
   const [debugMode, setDebugMode] = useState(false);
-  const [todoFields, setTodoFields] = useState({
-    callerName: "",      // 相手の名前
-    phoneNumber: "",     // 連絡先（電話番号）
-    contractName: "",    // 契約者名フルネーム
-    contractAddress: "", // 契約住所
-  });
   const [saveStatus, setSaveStatus] = useState(""); // "" | "summarizing" | "saving" | "saved" | "error"
   const [callSummary, setCallSummary] = useState(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
@@ -156,6 +150,7 @@ export default function App() {
   const noSpeechCountRef = useRef(0);
   const interimRef = useRef(""); // 未確定テキスト保持（セッション切断時の救出用）
   const transcriptLinesRef = useRef([]); // onresultからtranscript参照用
+  const manualFieldsRef = useRef(new Set()); // 手入力で編集されたフィールドを追跡
   const audioContextRef = useRef(null);
   const micStreamRef = useRef(null);
   const callActiveRef = useRef(false);
@@ -205,21 +200,26 @@ export default function App() {
         conversationIdRef.current = data.conversation_id;
       }
       const answer = data.answer || "回答を取得できませんでした。";
-      // [[INFO]]ブロックを抽出してtodoFieldsに反映
+      // [[INFO]]ブロックを抽出してフォームに反映（手入力済みフィールドは上書きしない）
       const infoMatch = answer.match(/\[\[INFO\]\]([\s\S]*?)\[\[\/INFO\]\]/);
       if (infoMatch) {
         const info = infoMatch[1];
-        setTodoFields(prev => {
+        const nameMatch = info.match(/名前:\s*(.+)/);
+        const contractNameMatch = info.match(/契約者名:\s*(.+)/);
+        const addressMatch = info.match(/契約住所:\s*(.+)/);
+        setEditableSummary(prev => {
           const updated = { ...prev };
-          const nameMatch = info.match(/名前:\s*(.+)/);
-          const contractNameMatch = info.match(/契約者名:\s*(.+)/);
-          const addressMatch = info.match(/契約住所:\s*(.+)/);
-          if (nameMatch && nameMatch[1].trim() !== "不明") updated.callerName = nameMatch[1].trim();
-          if (contractNameMatch && contractNameMatch[1].trim() !== "不明") updated.contractName = contractNameMatch[1].trim();
-          if (addressMatch && addressMatch[1].trim() !== "不明") updated.contractAddress = addressMatch[1].trim();
+          if (nameMatch && nameMatch[1].trim() !== "不明" && !manualFieldsRef.current.has("caller_name")) {
+            updated.caller_name = nameMatch[1].trim();
+          }
+          if (contractNameMatch && contractNameMatch[1].trim() !== "不明" && !manualFieldsRef.current.has("contract_name")) {
+            updated.contract_name = contractNameMatch[1].trim();
+          }
+          if (addressMatch && addressMatch[1].trim() !== "不明" && !manualFieldsRef.current.has("contract_address")) {
+            updated.contract_address = addressMatch[1].trim();
+          }
           return updated;
         });
-        // INFOブロックを除いた回答を表示
         setAiResponse(answer.replace(/\[\[INFO\]\][\s\S]*?\[\[\/INFO\]\]/, "").trim());
       } else {
         setAiResponse(answer);
@@ -333,10 +333,10 @@ ${fullText}`,
   }, [callDifyAPI]);
 
   const addLine = (text) => {
-    // 電話番号をローカル即時抽出
+    // 電話番号をローカル即時抽出（手入力済みなら上書きしない）
     const phone = extractPhoneNumber(text);
-    if (phone) {
-      setTodoFields(prev => prev.phoneNumber ? prev : { ...prev, phoneNumber: phone });
+    if (phone && !manualFieldsRef.current.has("callback_number")) {
+      setEditableSummary(prev => prev.callback_number ? prev : { ...prev, callback_number: phone });
     }
     setTranscript(prev => {
       const lines = [...prev, { id: Date.now() + Math.random(), text, ts: new Date().toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit",second:"2-digit"}) }];
@@ -570,7 +570,17 @@ ${fullText}`,
     setKbResults([]);
     setAiResponse("");
     setSpeechError("");
-    setTodoFields({ callerName: "", phoneNumber: "", contractName: "", contractAddress: "" });
+    setEditableSummary({
+      timestamp: new Date().toLocaleString("ja-JP"),
+      caller_name: "",
+      category: "",
+      summary: "",
+      callback_number: "",
+      contract_name: "",
+      contract_address: "",
+      operator: operatorName,
+    });
+    manualFieldsRef.current = new Set();
     conversationIdRef.current = "";
     lastSentRef.current = "";
     startSpeechRecognition();
@@ -591,20 +601,19 @@ ${fullText}`,
 
     if (currentTranscript.length === 0) return;
 
-    // 通話要約を生成してモーダルに表示
+    // 通話要約を生成し、手入力されていないフィールドのみ自動入力
     const summary = await summarizeCall(currentTranscript);
     if (summary) {
       setCallSummary(summary);
-      setEditableSummary({
-        timestamp: new Date().toLocaleString("ja-JP"),
-        caller_name: todoFields.callerName || summary.caller_name || "不明",
-        category: summary.category || "その他",
-        summary: summary.summary || "",
-        callback_number: todoFields.phoneNumber || summary.callback_number || "",
-        contract_name: todoFields.contractName || "",
-        contract_address: todoFields.contractAddress || "",
-        operator: operatorName,
-      });
+      setEditableSummary(prev => ({
+        ...prev,
+        caller_name: manualFieldsRef.current.has("caller_name") ? prev.caller_name : (prev.caller_name || summary.caller_name || "不明"),
+        category: manualFieldsRef.current.has("category") ? prev.category : (summary.category || prev.category || "その他"),
+        summary: manualFieldsRef.current.has("summary") ? prev.summary : (summary.summary || ""),
+        callback_number: manualFieldsRef.current.has("callback_number") ? prev.callback_number : (prev.callback_number || summary.callback_number || ""),
+        contract_name: manualFieldsRef.current.has("contract_name") ? prev.contract_name : (prev.contract_name || ""),
+        contract_address: manualFieldsRef.current.has("contract_address") ? prev.contract_address : (prev.contract_address || ""),
+      }));
       setSaveStatus("");
       setShowSummaryModal(true);
     }
@@ -619,6 +628,7 @@ ${fullText}`,
   };
 
   const handleEditField = (field, value) => {
+    manualFieldsRef.current.add(field);
     setEditableSummary(prev => ({ ...prev, [field]: value }));
   };
 
@@ -810,8 +820,8 @@ ${fullText}`,
 
         {/* Left: Transcript Panel */}
         <div style={{
-          width: "30%",
-          minWidth: 300,
+          width: "25%",
+          minWidth: 260,
           borderRight: "1px solid rgba(255,255,255,0.07)",
           display: "flex",
           flexDirection: "column",
@@ -1019,12 +1029,13 @@ ${fullText}`,
           </div>
         </div>
 
-        {/* Right: AI Guide Panel */}
+        {/* Center: AI Guide Panel */}
         <div style={{
           flex: 1,
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          borderRight: "1px solid rgba(255,255,255,0.07)",
         }}>
           <div style={{
             padding: "14px 20px 12px",
@@ -1057,44 +1068,6 @@ ${fullText}`,
               )}
             </div>
           </div>
-
-          {/* To-Do プレースホルダー */}
-          {callActive && (
-            <div style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 1fr",
-              gap: 8,
-              padding: "12px 20px",
-              borderBottom: "1px solid rgba(255,255,255,0.07)",
-            }}>
-              {[
-                { label: "相手の名前", key: "callerName" },
-                { label: "連絡先", key: "phoneNumber" },
-                { label: "契約者名", key: "contractName" },
-                { label: "契約住所", key: "contractAddress" },
-              ].map(({ label, key }) => (
-                <div key={key} style={{
-                  background: todoFields[key] ? "rgba(76,175,80,0.08)" : "rgba(255,255,255,0.03)",
-                  border: todoFields[key] ? "1px solid rgba(76,175,80,0.3)" : "1px solid rgba(255,255,255,0.08)",
-                  borderRadius: 8,
-                  padding: "8px 10px",
-                  transition: "all 0.3s",
-                }}>
-                  <div style={{ fontSize: 9, color: "#8892a4", letterSpacing: "0.05em", marginBottom: 3 }}>
-                    {label}
-                  </div>
-                  <div style={{
-                    fontSize: 12,
-                    color: todoFields[key] ? "#a5d6a7" : "#555",
-                    fontWeight: todoFields[key] ? 600 : 400,
-                    minHeight: 18,
-                  }}>
-                    {todoFields[key] || "—"}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
 
           <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
             {kbResults.length === 0 && !aiResponse ? (
@@ -1225,6 +1198,108 @@ ${fullText}`,
                 )}
               </div>
             )}
+          </div>
+        </div>
+
+        {/* Right: Record Form Panel */}
+        <div style={{
+          width: "25%",
+          minWidth: 260,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}>
+          <div style={{
+            padding: "14px 20px 12px",
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "#8892a4" }}>
+              ▌ 通話記録
+            </div>
+          </div>
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
+            {[
+              { key: "caller_name", label: "名前", icon: "👤" },
+              { key: "callback_number", label: "電話番号", icon: "📞" },
+              { key: "contract_name", label: "契約者名", icon: "📋" },
+              { key: "contract_address", label: "契約住所", icon: "🏠" },
+              { key: "category", label: "カテゴリー", icon: "📂", type: "select",
+                options: ["","接続障害","速度低下","料金・請求","解約・退会","機器設定","その他"] },
+              { key: "summary", label: "内容", icon: "📝", multiline: true },
+            ].map(({ key, label, icon, type, options, multiline }) => (
+              <div key={key} style={{ marginBottom: 10 }}>
+                <label style={{
+                  fontSize: 10,
+                  color: "#8892a4",
+                  letterSpacing: "0.05em",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 5,
+                  marginBottom: 4,
+                }}>
+                  <span>{icon}</span> {label}
+                  {manualFieldsRef.current.has(key) && (
+                    <span style={{ fontSize: 8, color: "#4caf50", marginLeft: 4 }}>手入力</span>
+                  )}
+                </label>
+                {type === "select" ? (
+                  <select
+                    value={editableSummary[key]}
+                    onChange={e => handleEditField(key, e.target.value)}
+                    style={{
+                      width: "100%",
+                      background: "rgba(255,255,255,0.05)",
+                      border: editableSummary[key] ? "1px solid rgba(76,175,80,0.3)" : "1px solid rgba(255,255,255,0.1)",
+                      borderRadius: 6,
+                      padding: "7px 10px",
+                      color: "#e8eaf0",
+                      fontSize: 12,
+                      outline: "none",
+                      appearance: "none",
+                    }}
+                  >
+                    {options.map(o => <option key={o} value={o} style={{ background: "#111d3d" }}>{o || "（未選択）"}</option>)}
+                  </select>
+                ) : multiline ? (
+                  <textarea
+                    value={editableSummary[key]}
+                    onChange={e => handleEditField(key, e.target.value)}
+                    rows={3}
+                    placeholder={key === "summary" ? "通話終了時に自動要約されます" : ""}
+                    style={{
+                      width: "100%",
+                      background: "rgba(255,255,255,0.05)",
+                      border: editableSummary[key] ? "1px solid rgba(76,175,80,0.3)" : "1px solid rgba(255,255,255,0.1)",
+                      borderRadius: 6,
+                      padding: "7px 10px",
+                      color: "#e8eaf0",
+                      fontSize: 12,
+                      lineHeight: 1.7,
+                      outline: "none",
+                      resize: "vertical",
+                      fontFamily: "inherit",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                ) : (
+                  <input
+                    value={editableSummary[key]}
+                    onChange={e => handleEditField(key, e.target.value)}
+                    style={{
+                      width: "100%",
+                      background: "rgba(255,255,255,0.05)",
+                      border: editableSummary[key] ? "1px solid rgba(76,175,80,0.3)" : "1px solid rgba(255,255,255,0.1)",
+                      borderRadius: 6,
+                      padding: "7px 10px",
+                      color: "#e8eaf0",
+                      fontSize: 12,
+                      outline: "none",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                )}
+              </div>
+            ))}
           </div>
         </div>
       </div>
