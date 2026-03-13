@@ -150,9 +150,6 @@ export default function App() {
   const audioContextRef = useRef(null);
   const micStreamRef = useRef(null);
   const callActiveRef = useRef(false);
-  const interimRef = useRef(""); // 中間テキスト保持用
-  const flushTimerRef = useRef(null); // 3秒強制確定タイマー
-  const lastFlushedRef = useRef(""); // 前回確定済みテキスト（重複防止）
 
   useEffect(() => {
     if (transcriptRef.current) {
@@ -352,22 +349,6 @@ ${fullText}`,
     recognition.onspeechend = () => addDebug("⏹ speechend — 音声終了");
     recognition.onstart = () => addDebug("✅ start — 認識サービス開始");
 
-    // 3秒ごとに中間テキストを強制確定する
-    const startFlushTimer = () => {
-      clearInterval(flushTimerRef.current);
-      flushTimerRef.current = setInterval(() => {
-        const text = interimRef.current.trim();
-        if (text && text !== lastFlushedRef.current) {
-          addDebug(`⏱ flush(3s): "${text}"`);
-          lastFlushedRef.current = text;
-          setInterimText("");
-          interimRef.current = "";
-          addLine(text);
-        }
-      }, 3000);
-    };
-    startFlushTimer();
-
     recognition.onresult = (event) => {
       restartAttemptsRef.current = 0;
       noSpeechCountRef.current = 0;
@@ -375,16 +356,11 @@ ${fullText}`,
         if (event.results[i].isFinal) {
           const finalText = event.results[i][0].transcript;
           addDebug(`📝 result(final): "${finalText}"`);
-          // タイマーリセット＆中間テキストクリア
-          interimRef.current = "";
-          lastFlushedRef.current = "";
           setInterimText("");
           addLine(finalText);
-          startFlushTimer();
         } else {
           const interim = event.results[i][0].transcript;
           addDebug(`... result(interim): "${interim}"`);
-          interimRef.current = interim;
           setInterimText(interim);
         }
       }
@@ -464,10 +440,6 @@ ${fullText}`,
   };
 
   const stopSpeechRecognition = () => {
-    clearInterval(flushTimerRef.current);
-    flushTimerRef.current = null;
-    interimRef.current = "";
-    lastFlushedRef.current = "";
     if (recognitionRef.current) {
       const ref = recognitionRef.current;
       recognitionRef.current = null;
