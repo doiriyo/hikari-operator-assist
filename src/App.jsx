@@ -139,6 +139,7 @@ export default function App() {
   const recognitionRef = useRef(null);
   const restartAttemptsRef = useRef(0);
   const noSpeechCountRef = useRef(0);
+  const interimRef = useRef(""); // 未確定テキスト保持（セッション切断時の救出用）
   const audioContextRef = useRef(null);
   const micStreamRef = useRef(null);
   const callActiveRef = useRef(false);
@@ -348,11 +349,13 @@ ${fullText}`,
         if (event.results[i].isFinal) {
           const finalText = event.results[i][0].transcript;
           addDebug(`📝 result(final): "${finalText}"`);
+          interimRef.current = "";
           setInterimText("");
           addLine(finalText);
         } else {
           const interim = event.results[i][0].transcript;
           addDebug(`... result(interim): "${interim}"`);
+          interimRef.current = interim;
           setInterimText(interim);
           // interimでもKB検索を実行（即答性向上）
           const found = searchKB(interim);
@@ -406,6 +409,12 @@ ${fullText}`,
 
     recognition.onend = () => {
       addDebug("⏹ end — 認識サービス終了");
+      // 未確定テキストが残っていたら確定として救出
+      if (interimRef.current.trim()) {
+        addDebug(`🛟 rescue interim: "${interimRef.current.trim()}"`);
+        addLine(interimRef.current.trim());
+        interimRef.current = "";
+      }
       setInterimText("");
       if (recognitionRef.current) {
         restartAttemptsRef.current += 1;
@@ -438,6 +447,7 @@ ${fullText}`,
   };
 
   const stopSpeechRecognition = () => {
+    // 通話終了時は onend の rescue に任せるため interimRef はここではクリアしない
     if (recognitionRef.current) {
       const ref = recognitionRef.current;
       recognitionRef.current = null;
