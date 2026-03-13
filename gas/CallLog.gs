@@ -16,7 +16,7 @@
 var SHEET_NAME = "通話記録";
 
 /**
- * 見出し定義（8項目）
+ * 見出し定義（9項目）
  */
 var HEADERS = [
   "タイムコード",
@@ -26,6 +26,7 @@ var HEADERS = [
   "電話番号",
   "契約者名",
   "契約住所",
+  "折返担当者",
   "受領者",
 ];
 
@@ -59,7 +60,8 @@ function initialSetup() {
   sheet.setColumnWidth(5, 150); // 電話番号
   sheet.setColumnWidth(6, 150); // 契約者名
   sheet.setColumnWidth(7, 250); // 契約住所
-  sheet.setColumnWidth(8, 120); // 受領者
+  sheet.setColumnWidth(8, 150); // 折返担当者
+  sheet.setColumnWidth(9, 120); // 受領者
 
   // 1行目を固定
   sheet.setFrozenRows(1);
@@ -91,10 +93,22 @@ function doPost(e) {
       data.callback_number || "",
       data.contract_name || "",
       data.contract_address || "",
+      data.callback_assignee || "",
       data.operator || "",
     ];
 
     sheet.appendRow(row);
+
+    // 「要折返」で始まる内容の行を強調表示
+    var summary = data.summary || "";
+    if (summary.indexOf("要折返") === 0) {
+      var lastRow = sheet.getLastRow();
+      var rowRange = sheet.getRange(lastRow, 1, 1, HEADERS.length);
+      rowRange.setBackground("#fff3e0");
+      rowRange.setFontColor("#e65100");
+      // 内容セルを太字に
+      sheet.getRange(lastRow, 4).setFontWeight("bold");
+    }
 
     return ContentService
       .createTextOutput(JSON.stringify({ status: "ok" }))

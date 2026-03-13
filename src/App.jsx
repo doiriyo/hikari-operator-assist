@@ -137,6 +137,7 @@ export default function App() {
     callback_number: "",
     contract_name: "",
     contract_address: "",
+    callback_assignee: "",
     operator: "",
   });
   const debugModeRef = useRef(false);
@@ -578,6 +579,7 @@ ${fullText}`,
       callback_number: "",
       contract_name: "",
       contract_address: "",
+      callback_assignee: "",
       operator: operatorName,
     });
     manualFieldsRef.current = new Set();
@@ -620,7 +622,15 @@ ${fullText}`,
   };
 
   const handleSaveSummary = async () => {
-    const saved = await saveToSpreadsheet(editableSummary);
+    const dataToSave = { ...editableSummary };
+    // 折り返し担当者が指定されている場合、内容の先頭に「要折返TEL：〇〇」を付与
+    if (dataToSave.callback_assignee) {
+      const prefix = `要折返TEL：${dataToSave.callback_assignee}`;
+      if (!dataToSave.summary.startsWith("要折返")) {
+        dataToSave.summary = `${prefix}\n${dataToSave.summary}`;
+      }
+    }
+    const saved = await saveToSpreadsheet(dataToSave);
     setSaveStatus(saved ? "saved" : (GAS_WEBHOOK_URL ? "error" : "saved"));
     if (saved || !GAS_WEBHOOK_URL) {
       setTimeout(() => setShowSummaryModal(false), 1200);
@@ -1225,6 +1235,7 @@ ${fullText}`,
               { key: "contract_address", label: "契約住所", icon: "🏠" },
               { key: "category", label: "カテゴリー", icon: "📂", type: "select",
                 options: ["","接続障害","速度低下","料金・請求","解約・退会","機器設定","その他"] },
+              { key: "callback_assignee", label: "折返担当者", icon: "🔄" },
               { key: "summary", label: "内容", icon: "📝", multiline: true },
             ].map(({ key, label, icon, type, options, multiline }) => (
               <div key={key} style={{ marginBottom: 10 }}>
@@ -1483,6 +1494,7 @@ ${fullText}`,
                 { key: "callback_number", label: "電話番号", icon: "📞" },
                 { key: "contract_name", label: "契約者名", icon: "📋" },
                 { key: "contract_address", label: "契約住所", icon: "🏠" },
+                { key: "callback_assignee", label: "折返担当者", icon: "🔄" },
                 { key: "operator", label: "受領者", icon: "🧑‍💼" },
               ].map(({ key, label, icon, type, options, multiline }) => (
                 <div key={key} style={{ marginBottom: 14 }}>
