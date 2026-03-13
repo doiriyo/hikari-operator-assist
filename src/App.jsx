@@ -65,21 +65,14 @@ const MOCK_KB = [
 ];
 
 function searchKB(text) {
-  if (!text || text.length < 3) return null;
+  if (!text || text.length < 3) return [];
   const lower = text.toLowerCase().replace(/\s/g, "");
-  let best = null, bestScore = 0;
-  for (const item of MOCK_KB) {
-    const score = item.keywords.filter(k => lower.includes(k)).length;
-    if (score > bestScore) { best = item; bestScore = score; }
-  }
-  return bestScore > 0 ? best : null;
+  return MOCK_KB
+    .map(item => ({ ...item, score: item.keywords.filter(k => lower.includes(k)).length }))
+    .filter(item => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
 }
-
-const DEMO_SCRIPT = [
-  { delay: 1200, text: "もしもし、え〜と、ネットが昨日から" },
-  { delay: 900, text: "繋がらなくて困っているんですが" },
-  { delay: 1100, text: "インターネットが全然繋がらないんです" },
-];
 
 const SESSION_KEY = "operator_session";
 const SESSION_TTL = 6 * 60 * 60 * 1000; // 6時間
@@ -113,7 +106,7 @@ export default function App() {
   const isLoggedIn = !!operatorName;
 
   const [transcript, setTranscript] = useState([]);
-  const [kbResult, setKbResult] = useState(null);
+  const [kbResults, setKbResults] = useState([]);
   const [aiResponse, setAiResponse] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [isListening, setIsListening] = useState(false);
@@ -140,7 +133,6 @@ export default function App() {
   const debugModeRef = useRef(false);
   const transcriptRef = useRef(null);
   const timerRef = useRef(null);
-  const demoRef = useRef(null);
   const difyTimerRef = useRef(null);
   const conversationIdRef = useRef("");
   const lastSentRef = useRef("");
@@ -301,7 +293,7 @@ ${fullText}`,
   const scheduleDifyCall = useCallback((lines) => {
     clearTimeout(difyTimerRef.current);
     const fullText = lines.map(l => l.text).join("\n");
-    difyTimerRef.current = setTimeout(() => callDifyAPI(fullText), 2000);
+    difyTimerRef.current = setTimeout(() => callDifyAPI(fullText), 500);
   }, [callDifyAPI]);
 
   const addLine = (text) => {
@@ -309,9 +301,9 @@ ${fullText}`,
       const lines = [...prev, { id: Date.now() + Math.random(), text, ts: new Date().toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit",second:"2-digit"}) }];
       const fullText = lines.map(l => l.text).join(" ");
       const found = searchKB(fullText);
-      if (found) {
+      if (found.length > 0) {
         setAnimateResult(false);
-        setTimeout(() => { setKbResult(found); setAnimateResult(true); }, 50);
+        setTimeout(() => { setKbResults(found); setAnimateResult(true); }, 50);
       }
       scheduleDifyCall(lines);
       return lines;
@@ -362,6 +354,12 @@ ${fullText}`,
           const interim = event.results[i][0].transcript;
           addDebug(`... result(interim): "${interim}"`);
           setInterimText(interim);
+          // interimでもKB検索を実行（即答性向上）
+          const found = searchKB(interim);
+          if (found.length > 0) {
+            setAnimateResult(false);
+            setTimeout(() => { setKbResults(found); setAnimateResult(true); }, 50);
+          }
         }
       }
     };
@@ -517,29 +515,13 @@ ${fullText}`,
     callActiveRef.current = true;
     setIsListening(true);
     setTranscript([]);
-    setKbResult(null);
+    setKbResults([]);
     setAiResponse("");
     setSpeechError("");
     conversationIdRef.current = "";
     lastSentRef.current = "";
     startSpeechRecognition();
     if (debugModeRef.current) startMicMonitor();
-  };
-
-  const startDemo = () => {
-    setCallActive(true);
-    setIsListening(true);
-    setTranscript([]);
-    setKbResult(null);
-    setAiResponse("");
-    setSpeechError("");
-    conversationIdRef.current = "";
-    lastSentRef.current = "";
-    let cumDelay = 500;
-    DEMO_SCRIPT.forEach(({ delay, text }) => {
-      cumDelay += delay;
-      demoRef.current = setTimeout(() => addLine(text), cumDelay);
-    });
   };
 
   const endCall = async () => {
@@ -551,7 +533,6 @@ ${fullText}`,
     setSpeechError("");
     setInterimText("");
     stopMicMonitor();
-    clearTimeout(demoRef.current);
     clearTimeout(difyTimerRef.current);
     stopSpeechRecognition();
 
@@ -1001,19 +982,19 @@ ${fullText}`,
               ▌ AIアシスト — 対応ガイド
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              {kbResult && (
-                <span style={{
-                  background: "rgba(255,183,77,0.15)",
-                  border: "1px solid rgba(255,183,77,0.35)",
+              {kbResults.length > 0 && kbResults.map((r, i) => (
+                <span key={i} style={{
+                  background: i === 0 ? "rgba(255,183,77,0.15)" : "rgba(255,255,255,0.05)",
+                  border: i === 0 ? "1px solid rgba(255,183,77,0.35)" : "1px solid rgba(255,255,255,0.1)",
                   borderRadius: 20,
                   padding: "3px 12px",
                   fontSize: 11,
-                  color: "#ffb74d",
+                  color: i === 0 ? "#ffb74d" : "#8892a4",
                   fontWeight: 700,
                 }}>
-                  {kbResult.category}
+                  {r.category}
                 </span>
-              )}
+              ))}
               {aiLoading && (
                 <span style={{ fontSize: 10, color: "#64b5f6", animation: "blink 1s infinite" }}>
                   AI分析中...
@@ -1023,7 +1004,7 @@ ${fullText}`,
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-            {!kbResult && !aiResponse ? (
+            {kbResults.length === 0 && !aiResponse ? (
               <div style={{
                 height: "100%",
                 display: "flex",
@@ -1040,8 +1021,8 @@ ${fullText}`,
               </div>
             ) : (
               <div>
-                {/* KB Quick Result */}
-                {kbResult && (
+                {/* KB Quick Results */}
+                {kbResults.length > 0 && (
                   <div style={{
                     animation: animateResult ? "fadeSlideIn 0.4s ease" : "none",
                     marginBottom: 24,
@@ -1049,81 +1030,70 @@ ${fullText}`,
                     <div style={{ fontSize: 11, color: "#8892a4", letterSpacing: "0.1em", marginBottom: 12 }}>
                       クイックガイド
                     </div>
-                    {kbResult.steps.map((step, i) => (
-                      <div key={i} style={{
-                        display: "flex",
-                        gap: 14,
-                        marginBottom: 10,
-                        animation: `fadeSlideIn 0.3s ease ${i * 0.08}s both`,
+                    {kbResults.map((result, ri) => (
+                      <div key={ri} style={{
+                        marginBottom: ri < kbResults.length - 1 ? 20 : 0,
+                        animation: `fadeSlideIn 0.3s ease ${ri * 0.1}s both`,
                       }}>
                         <div style={{
-                          width: 24, height: 24,
-                          borderRadius: "50%",
-                          background: "linear-gradient(135deg, #ffb74d22, #ff8f0022)",
-                          border: "1.5px solid #ffb74d66",
-                          display: "flex", alignItems: "center", justifyContent: "center",
-                          flexShrink: 0,
-                          fontSize: 11, fontWeight: 800, color: "#ffb74d",
+                          fontSize: 12,
+                          fontWeight: 700,
+                          color: ri === 0 ? "#ffb74d" : "#8892a4",
+                          marginBottom: 8,
                         }}>
-                          {i + 1}
+                          {result.category}
                         </div>
+                        {result.steps.map((step, i) => (
+                          <div key={i} style={{
+                            display: "flex",
+                            gap: 14,
+                            marginBottom: 10,
+                            animation: `fadeSlideIn 0.3s ease ${(ri * 0.1 + i * 0.08)}s both`,
+                          }}>
+                            <div style={{
+                              width: 24, height: 24,
+                              borderRadius: "50%",
+                              background: ri === 0
+                                ? "linear-gradient(135deg, #ffb74d22, #ff8f0022)"
+                                : "rgba(255,255,255,0.05)",
+                              border: ri === 0 ? "1.5px solid #ffb74d66" : "1.5px solid rgba(255,255,255,0.15)",
+                              display: "flex", alignItems: "center", justifyContent: "center",
+                              flexShrink: 0,
+                              fontSize: 11, fontWeight: 800,
+                              color: ri === 0 ? "#ffb74d" : "#8892a4",
+                            }}>
+                              {i + 1}
+                            </div>
+                            <div style={{
+                              background: "rgba(255,255,255,0.03)",
+                              border: "1px solid rgba(255,255,255,0.08)",
+                              borderRadius: 10,
+                              padding: "8px 12px",
+                              fontSize: 13,
+                              lineHeight: 1.7,
+                              flex: 1,
+                              color: "#d0d8e8",
+                            }}>
+                              {step}
+                            </div>
+                          </div>
+                        ))}
                         <div style={{
-                          background: "rgba(255,255,255,0.03)",
-                          border: "1px solid rgba(255,255,255,0.08)",
-                          borderRadius: 10,
-                          padding: "8px 12px",
-                          fontSize: 13,
-                          lineHeight: 1.7,
-                          flex: 1,
-                          color: "#d0d8e8",
+                          background: "rgba(100,181,246,0.06)",
+                          border: "1px solid rgba(100,181,246,0.2)",
+                          borderRadius: 12,
+                          padding: "12px 14px",
+                          display: "flex",
+                          gap: 10,
+                          marginTop: 12,
                         }}>
-                          {step}
+                          <div style={{ fontSize: 16, flexShrink: 0 }}>💡</div>
+                          <div style={{ fontSize: 12, color: "#90caf9", lineHeight: 1.8 }}>
+                            {result.tip}
+                          </div>
                         </div>
                       </div>
                     ))}
-
-                    <div style={{
-                      background: "rgba(100,181,246,0.06)",
-                      border: "1px solid rgba(100,181,246,0.2)",
-                      borderRadius: 12,
-                      padding: "12px 14px",
-                      display: "flex",
-                      gap: 10,
-                      marginTop: 12,
-                    }}>
-                      <div style={{ fontSize: 16, flexShrink: 0 }}>💡</div>
-                      <div style={{ fontSize: 12, color: "#90caf9", lineHeight: 1.8 }}>
-                        {kbResult.tip}
-                      </div>
-                    </div>
-
-                    <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 14 }}>
-                      {MOCK_KB.map(item => (
-                        <button
-                          key={item.category}
-                          onClick={() => {
-                            setAnimateResult(false);
-                            setTimeout(() => { setKbResult(item); setAnimateResult(true); }, 50);
-                          }}
-                          style={{
-                            background: kbResult.category === item.category
-                              ? "rgba(255,183,77,0.2)"
-                              : "rgba(255,255,255,0.04)",
-                            border: kbResult.category === item.category
-                              ? "1px solid rgba(255,183,77,0.5)"
-                              : "1px solid rgba(255,255,255,0.1)",
-                            borderRadius: 20,
-                            padding: "4px 12px",
-                            fontSize: 11,
-                            color: kbResult.category === item.category ? "#ffb74d" : "#8892a4",
-                            cursor: "pointer",
-                            transition: "all 0.2s",
-                          }}
-                        >
-                          {item.category}
-                        </button>
-                      ))}
-                    </div>
                   </div>
                 )}
 
@@ -1200,17 +1170,6 @@ ${fullText}`,
               }}>
                 🎙️ 通話開始（音声認識）
               </button>
-              <button onClick={startDemo} style={{
-                background: "rgba(255,255,255,0.06)",
-                border: "1px solid rgba(255,255,255,0.15)",
-                borderRadius: 10,
-                padding: "10px 20px",
-                color: "#8892a4",
-                fontSize: 13,
-                cursor: "pointer",
-              }}>
-                📞 デモ
-              </button>
             </>
           ) : (
             <button onClick={endCall} style={{
@@ -1228,7 +1187,7 @@ ${fullText}`,
               📵 通話終了
             </button>
           )}
-          <button onClick={() => { setTranscript([]); setKbResult(null); setAiResponse(""); conversationIdRef.current = ""; lastSentRef.current = ""; }} style={{
+          <button onClick={() => { setTranscript([]); setKbResults([]); setAiResponse(""); conversationIdRef.current = ""; lastSentRef.current = ""; }} style={{
             background: "rgba(255,255,255,0.06)",
             border: "1px solid rgba(255,255,255,0.1)",
             borderRadius: 10,
