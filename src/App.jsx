@@ -74,6 +74,13 @@ function searchKB(text) {
     .slice(0, 3);
 }
 
+function extractPhoneNumber(text) {
+  const normalized = text.replace(/[\s\u3000]/g, "");
+  // 携帯: 090/080/070、固定: 0X-XXXX-XXXX、フリーダイヤル: 0120/0800
+  const match = normalized.match(/0[0-9]{1,4}[-ー]?[0-9]{1,4}[-ー]?[0-9]{3,4}/);
+  return match ? match[0] : null;
+}
+
 const SESSION_KEY = "operator_session";
 const SESSION_TTL = 6 * 60 * 60 * 1000; // 6時間
 
@@ -119,6 +126,12 @@ export default function App() {
   const [speechDebug, setSpeechDebug] = useState([]);
   const [micLevel, setMicLevel] = useState(0);
   const [debugMode, setDebugMode] = useState(false);
+  const [todoFields, setTodoFields] = useState({
+    callerName: "",      // 相手の名前
+    phoneNumber: "",     // 連絡先（電話番号）
+    contractName: "",    // 契約者名フルネーム
+    contractAddress: "", // 契約住所
+  });
   const [saveStatus, setSaveStatus] = useState(""); // "" | "summarizing" | "saving" | "saved" | "error"
   const [callSummary, setCallSummary] = useState(null);
   const [showSummaryModal, setShowSummaryModal] = useState(false);
@@ -177,7 +190,7 @@ export default function App() {
         },
         body: JSON.stringify({
           inputs: {},
-          query: `以下はお客様との通話内容です。この内容に基づいて、オペレーターが取るべき対応手順を簡潔に案内してください。\n\n通話内容:\n${fullText}`,
+          query: `以下はお客様との通話内容です。この内容に基づいて、オペレーターが取るべき対応手順を簡潔に案内してください。\n\nまた、通話内容から以下の情報が判明した場合は、回答の末尾に次の形式で記載してください（不明な項目は省略）:\n[[INFO]]\n名前: （相手の名前）\n契約者名: （阿蘇光の契約者フルネーム）\n契約住所: （契約住所）\n[[/INFO]]\n\n通話内容:\n${fullText}`,
           response_mode: "blocking",
           conversation_id: conversationIdRef.current || undefined,
           user: "operator",
@@ -189,7 +202,26 @@ export default function App() {
       if (data.conversation_id) {
         conversationIdRef.current = data.conversation_id;
       }
-      setAiResponse(data.answer || "回答を取得できませんでした。");
+      const answer = data.answer || "回答を取得できませんでした。";
+      // [[INFO]]ブロックを抽出してtodoFieldsに反映
+      const infoMatch = answer.match(/\[\[INFO\]\]([\s\S]*?)\[\[\/INFO\]\]/);
+      if (infoMatch) {
+        const info = infoMatch[1];
+        setTodoFields(prev => {
+          const updated = { ...prev };
+          const nameMatch = info.match(/名前:\s*(.+)/);
+          const contractNameMatch = info.match(/契約者名:\s*(.+)/);
+          const addressMatch = info.match(/契約住所:\s*(.+)/);
+          if (nameMatch && nameMatch[1].trim() !== "不明") updated.callerName = nameMatch[1].trim();
+          if (contractNameMatch && contractNameMatch[1].trim() !== "不明") updated.contractName = contractNameMatch[1].trim();
+          if (addressMatch && addressMatch[1].trim() !== "不明") updated.contractAddress = addressMatch[1].trim();
+          return updated;
+        });
+        // INFOブロックを除いた回答を表示
+        setAiResponse(answer.replace(/\[\[INFO\]\][\s\S]*?\[\[\/INFO\]\]/, "").trim());
+      } else {
+        setAiResponse(answer);
+      }
     } catch (err) {
       console.error("Dify API error:", err);
       setAiResponse("APIエラーが発生しました。接続を確認してください。");
@@ -299,6 +331,11 @@ ${fullText}`,
   }, [callDifyAPI]);
 
   const addLine = (text) => {
+    // 電話番号をローカル即時抽出
+    const phone = extractPhoneNumber(text);
+    if (phone) {
+      setTodoFields(prev => prev.phoneNumber ? prev : { ...prev, phoneNumber: phone });
+    }
     setTranscript(prev => {
       const lines = [...prev, { id: Date.now() + Math.random(), text, ts: new Date().toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit",second:"2-digit"}) }];
       transcriptLinesRef.current = lines;
@@ -531,6 +568,7 @@ ${fullText}`,
     setKbResults([]);
     setAiResponse("");
     setSpeechError("");
+    setTodoFields({ callerName: "", phoneNumber: "", contractName: "", contractAddress: "" });
     conversationIdRef.current = "";
     lastSentRef.current = "";
     startSpeechRecognition();
@@ -1015,6 +1053,44 @@ ${fullText}`,
               )}
             </div>
           </div>
+
+          {/* To-Do プレースホルダー */}
+          {callActive && (
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 1fr",
+              gap: 8,
+              padding: "12px 20px",
+              borderBottom: "1px solid rgba(255,255,255,0.07)",
+            }}>
+              {[
+                { label: "相手の名前", key: "callerName" },
+                { label: "連絡先", key: "phoneNumber" },
+                { label: "契約者名", key: "contractName" },
+                { label: "契約住所", key: "contractAddress" },
+              ].map(({ label, key }) => (
+                <div key={key} style={{
+                  background: todoFields[key] ? "rgba(76,175,80,0.08)" : "rgba(255,255,255,0.03)",
+                  border: todoFields[key] ? "1px solid rgba(76,175,80,0.3)" : "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 8,
+                  padding: "8px 10px",
+                  transition: "all 0.3s",
+                }}>
+                  <div style={{ fontSize: 9, color: "#8892a4", letterSpacing: "0.05em", marginBottom: 3 }}>
+                    {label}
+                  </div>
+                  <div style={{
+                    fontSize: 12,
+                    color: todoFields[key] ? "#a5d6a7" : "#555",
+                    fontWeight: todoFields[key] ? 600 : 400,
+                    minHeight: 18,
+                  }}>
+                    {todoFields[key] || "—"}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
 
           <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
             {kbResults.length === 0 && !aiResponse ? (
