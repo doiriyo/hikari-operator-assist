@@ -16,7 +16,7 @@
 var SHEET_NAME = "通話記録";
 
 /**
- * 見出し定義（6項目）
+ * 見出し定義（8項目）
  */
 var HEADERS = [
   "タイムコード",
@@ -24,6 +24,8 @@ var HEADERS = [
   "カテゴリー",
   "内容",
   "電話番号",
+  "契約者名",
+  "契約住所",
   "受領者",
 ];
 
@@ -55,7 +57,9 @@ function initialSetup() {
   sheet.setColumnWidth(3, 140); // カテゴリー
   sheet.setColumnWidth(4, 400); // 内容
   sheet.setColumnWidth(5, 150); // 電話番号
-  sheet.setColumnWidth(6, 120); // 受領者
+  sheet.setColumnWidth(6, 150); // 契約者名
+  sheet.setColumnWidth(7, 250); // 契約住所
+  sheet.setColumnWidth(8, 120); // 受領者
 
   // 1行目を固定
   sheet.setFrozenRows(1);
@@ -85,6 +89,8 @@ function doPost(e) {
       data.category || "",
       data.summary || "",
       data.callback_number || "",
+      data.contract_name || "",
+      data.contract_address || "",
       data.operator || "",
     ];
 

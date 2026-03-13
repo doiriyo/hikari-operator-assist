@@ -141,6 +141,8 @@ export default function App() {
     category: "",
     summary: "",
     callback_number: "",
+    contract_name: "",
+    contract_address: "",
     operator: "",
   });
   const debugModeRef = useRef(false);
@@ -595,10 +597,12 @@ ${fullText}`,
       setCallSummary(summary);
       setEditableSummary({
         timestamp: new Date().toLocaleString("ja-JP"),
-        caller_name: summary.caller_name || "不明",
+        caller_name: todoFields.callerName || summary.caller_name || "不明",
         category: summary.category || "その他",
         summary: summary.summary || "",
-        callback_number: summary.callback_number || "",
+        callback_number: todoFields.phoneNumber || summary.callback_number || "",
+        contract_name: todoFields.contractName || "",
+        contract_address: todoFields.contractAddress || "",
         operator: operatorName,
       });
       setSaveStatus("");
@@ -1402,6 +1406,8 @@ ${fullText}`,
                   options: ["接続障害","速度低下","料金・請求","解約・退会","機器設定","その他"] },
                 { key: "summary", label: "内容", icon: "📝", multiline: true },
                 { key: "callback_number", label: "電話番号", icon: "📞" },
+                { key: "contract_name", label: "契約者名", icon: "📋" },
+                { key: "contract_address", label: "契約住所", icon: "🏠" },
                 { key: "operator", label: "受領者", icon: "🧑‍💼" },
               ].map(({ key, label, icon, type, options, multiline }) => (
                 <div key={key} style={{ marginBottom: 14 }}>
