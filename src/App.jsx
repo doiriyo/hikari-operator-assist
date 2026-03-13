@@ -140,6 +140,7 @@ export default function App() {
   const restartAttemptsRef = useRef(0);
   const noSpeechCountRef = useRef(0);
   const interimRef = useRef(""); // 未確定テキスト保持（セッション切断時の救出用）
+  const transcriptLinesRef = useRef([]); // onresultからtranscript参照用
   const audioContextRef = useRef(null);
   const micStreamRef = useRef(null);
   const callActiveRef = useRef(false);
@@ -291,15 +292,16 @@ ${fullText}`,
     }
   }, []);
 
-  const scheduleDifyCall = useCallback((lines) => {
+  const scheduleDifyCall = useCallback((lines, interim = "") => {
     clearTimeout(difyTimerRef.current);
-    const fullText = lines.map(l => l.text).join("\n");
+    const fullText = lines.map(l => l.text).join("\n") + (interim ? "\n" + interim : "");
     difyTimerRef.current = setTimeout(() => callDifyAPI(fullText), 500);
   }, [callDifyAPI]);
 
   const addLine = (text) => {
     setTranscript(prev => {
       const lines = [...prev, { id: Date.now() + Math.random(), text, ts: new Date().toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit",second:"2-digit"}) }];
+      transcriptLinesRef.current = lines;
       const fullText = lines.map(l => l.text).join(" ");
       const found = searchKB(fullText);
       if (found.length > 0) {
@@ -357,12 +359,13 @@ ${fullText}`,
           addDebug(`... result(interim): "${interim}"`);
           interimRef.current = interim;
           setInterimText(interim);
-          // interimでもKB検索を実行（即答性向上）
+          // interimでもKB検索+Dify APIを実行（即答性向上）
           const found = searchKB(interim);
           if (found.length > 0) {
             setAnimateResult(false);
             setTimeout(() => { setKbResults(found); setAnimateResult(true); }, 50);
           }
+          scheduleDifyCall(transcriptLinesRef.current, interim);
         }
       }
     };
