@@ -380,8 +380,8 @@ ${fullText}`,
   const scheduleDifyCall = useCallback((lines, interim = "") => {
     clearTimeout(difyTimerRef.current);
     const fullText = lines.map(l => {
-      const label = l.speaker === "operator" ? "[OP]" : "[CU]";
-      return `${label} ${l.text}`;
+      const label = l.speaker === "operator" ? "[OP]" : l.speaker === "customer" ? "[CU]" : "";
+      return label ? `${label} ${l.text}` : l.text;
     }).join("\n") + (interim ? "\n" + interim : "");
     difyTimerRef.current = setTimeout(() => callDifyAPI(fullText), 500);
   }, [callDifyAPI]);
@@ -510,7 +510,7 @@ ${fullText}`,
           addDebug(`📝 result(final): "${finalText}"`);
           interimRef.current = "";
           setInterimText("");
-          addLine(finalText, "customer");
+          addLine(finalText, "mixed");
         } else {
           const interim = event.results[i][0].transcript;
           addDebug(`... result(interim): "${interim}"`);
@@ -570,7 +570,7 @@ ${fullText}`,
       addDebug("⏹ end — 認識サービス終了");
       if (interimRef.current.trim()) {
         addDebug(`🛟 rescue interim: "${interimRef.current.trim()}"`);
-        addLine(interimRef.current.trim(), "customer");
+        addLine(interimRef.current.trim(), "mixed");
         interimRef.current = "";
       }
       setInterimText("");
@@ -809,8 +809,8 @@ ${fullText}`,
     // 話者付き会話ログを付与
     if (transcript.length > 0) {
       dataToSave.conversation_log = transcript.map(l => {
-        const label = l.speaker === "operator" ? "[OP]" : "[CU]";
-        return `${l.ts} ${label} ${l.text}`;
+        const label = l.speaker === "operator" ? "[OP]" : l.speaker === "customer" ? "[CU]" : "";
+        return label ? `${l.ts} ${label} ${l.text}` : `${l.ts} ${l.text}`;
       }).join("\n");
     }
     const saved = await saveToSpreadsheet(dataToSave);
@@ -1138,27 +1138,27 @@ ${fullText}`,
               <>
                 {transcript.map((line) => {
                   const isOp = line.speaker === "operator";
+                  const isCu = line.speaker === "customer";
+                  const isMixed = line.speaker === "mixed";
+                  const speakerColor = isOp ? "#64b5f6" : isCu ? "#ffb74d" : "#e8eaf0";
+                  const speakerName = isOp ? "オペレーター" : isCu ? "お客様" : "通話音声";
                   return (
                     <div key={line.id} style={{
                       marginBottom: 14,
                       animation: "fadeSlideIn 0.3s ease",
                     }}>
                       <div style={{ fontSize: 10, color: "#8892a4", marginBottom: 4 }}>
-                        {line.ts} — {isOp ? (
-                          <span style={{ color: "#64b5f6" }}>オペレーター</span>
-                        ) : (
-                          <span style={{ color: "#ffb74d" }}>お客様</span>
-                        )}
+                        {line.ts} — <span style={{ color: speakerColor }}>{speakerName}</span>
                       </div>
                       <div style={{
-                        background: isOp ? "rgba(100,181,246,0.06)" : "rgba(255,183,77,0.06)",
-                        border: isOp ? "1px solid rgba(100,181,246,0.15)" : "1px solid rgba(255,183,77,0.15)",
+                        background: isOp ? "rgba(100,181,246,0.06)" : isCu ? "rgba(255,183,77,0.06)" : "rgba(255,255,255,0.03)",
+                        border: isOp ? "1px solid rgba(100,181,246,0.15)" : isCu ? "1px solid rgba(255,183,77,0.15)" : "1px solid rgba(255,255,255,0.08)",
                         borderRadius: 10,
                         padding: "10px 14px",
                         fontSize: 14,
                         lineHeight: 1.7,
                         color: "#e8eaf0",
-                        borderLeft: isOp ? "3px solid rgba(100,181,246,0.4)" : "3px solid rgba(255,183,77,0.4)",
+                        borderLeft: isMixed ? "none" : isOp ? "3px solid rgba(100,181,246,0.4)" : "3px solid rgba(255,183,77,0.4)",
                       }}>
                         {line.text}
                       </div>
