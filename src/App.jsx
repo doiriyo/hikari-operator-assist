@@ -1,5 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 
+// Electron 環境検出（将来の whisper.cpp IPC 分岐用）
+const isElectron = window.electronAPI?.isElectron ?? false;
+
 const DIFY_API_URL = "https://api.dify.ai/v1/chat-messages";
 const DIFY_API_KEY = "app-3FRus6A0PmVdDo8oFDT2r90G";
 
