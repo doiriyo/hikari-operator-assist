@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>Speech Recognition Worker</title>
+</head>
+<body>
+<script>
+/**
+ * iframe 内で動作する音声認識ワーカー
+ *
+ * 親ウィンドウから postMessage で制御し、認識結果を返す。
+ * getUserMedia で特定デバイスをアクティブにしてから
+ * SpeechRecognition を開始することで、そのデバイスの音声を認識させる。
+ *
+ * Protocol:
+ *   親 → iframe:
+ *     { type: 'start', deviceId: string, speaker: string, lang: string }
+ *     { type: 'stop' }
+ *
+ *   iframe → 親:
+ *     { type: 'ready' }
+ *     { type: 'result', speaker: string, text: string, isFinal: boolean }
+ *     { type: 'error', speaker: string, error: string, fatal: boolean }
+ *     { type: 'status', speaker: string, status: string }
+ */
+
+var recognition = null;
+var mediaStream = null;
+var speaker = '';
+var restartAttempts = 0;
+var noSpeechCount = 0;
+var shouldRestart = false;
+var MAX_RESTART = 30;
+
+function send(msg) {
+  window.parent.postMessage(msg, '*');
+}
+
+function cleanup() {
+  shouldRestart = false;
+  if (recognition) {
+    try { recognition.abort(); } catch (e) { /* ignore */ }
+    recognition = null;
+  }
+  if (mediaStream) {
+    mediaStream.getTracks().forEach(function(t) { t.stop(); });
+    mediaStream = null;
+  }
+  restartAttempts = 0;
+  noSpeechCount = 0;
+}
+
+async function startRecognition(deviceId, speakerLabel, lang) {
+  cleanup();
+
+  speaker = speakerLabel || 'unknown';
+  var recognitionLang = lang || 'ja-JP';
+
+  // Step 1: getUserMedia で対象デバイスをアクティブにする
+  try {
+    var constraints = {
+      audio: deviceId
+        ? { deviceId: { exact: deviceId } }
+        : true
+    };
+    mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+    send({ type: 'status', speaker: speaker, status: 'mic_acquired' });
+  } catch (err) {
+    send({
+      type: 'error',
+      speaker: speaker,
+      error: 'マイク取得失敗: ' + err.message,
+      fatal: true
+    });
+    return;
+  }
+
+  // Step 2: SpeechRecognition を開始
+  var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) {
+    send({
+      type: 'error',
+      speaker: speaker,
+      error: 'このブラウザは音声認識に対応していません',
+      fatal: true
+    });
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.lang = recognitionLang;
+  recognition.continuous = true;
+  recognition.interimResults = true;
+
+  recognition.onresult = function(event) {
+    restartAttempts = 0;
+    noSpeechCount = 0;
+    for (var i = event.resultIndex; i < event.results.length; i++) {
+      send({
+        type: 'result',
+        speaker: speaker,
+        text: event.results[i][0].transcript,
+        isFinal: event.results[i].isFinal
+      });
+    }
+  };
+
+  recognition.onerror = function(event) {
+    switch (event.error) {
+      case 'not-allowed':
+        send({
+          type: 'error',
+          speaker: speaker,
+          error: 'マイクへのアクセスが拒否されました',
+          fatal: true
+        });
+        shouldRestart = false;
+        break;
+      case 'audio-capture':
+        send({
+          type: 'error',
+          speaker: speaker,
+          error: 'マイクが検出されません',
+          fatal: true
+        });
+        shouldRestart = false;
+        break;
+      case 'no-speech':
+        noSpeechCount++;
+        if (noSpeechCount >= 5) {
+          send({
+            type: 'error',
+            speaker: speaker,
+            error: '音声が検出されません（' + speaker + '）',
+            fatal: false
+          });
+        }
+        break;
+      case 'network':
+        send({
+          type: 'error',
+          speaker: speaker,
+          error: '音声認識サーバーに接続できません',
+          fatal: false
+        });
+        break;
+      default:
+        send({
+          type: 'error',
+          speaker: speaker,
+          error: '音声認識エラー: ' + event.error,
+          fatal: false
+        });
+    }
+  };
+
+  recognition.onend = function() {
+    if (shouldRestart && recognition) {
+      restartAttempts++;
+      if (restartAttempts > MAX_RESTART) {
+        send({
+          type: 'error',
+          speaker: speaker,
+          error: '音声認識が繰り返し停止しました（' + speaker + '）',
+          fatal: true
+        });
+        return;
+      }
+      try {
+        recognition.start();
+      } catch (e) {
+        send({
+          type: 'error',
+          speaker: speaker,
+          error: '音声認識の再開に失敗しました',
+          fatal: true
+        });
+      }
+    } else {
+      send({ type: 'status', speaker: speaker, status: 'stopped' });
+    }
+  };
+
+  shouldRestart = true;
+  try {
+    recognition.start();
+    send({ type: 'status', speaker: speaker, status: 'started' });
+  } catch (err) {
+    send({
+      type: 'error',
+      speaker: speaker,
+      error: '音声認識の開始に失敗しました: ' + err.message,
+      fatal: true
+    });
+  }
+}
+
+window.addEventListener('message', function(event) {
+  var data = event.data;
+  if (!data || !data.type) return;
+
+  switch (data.type) {
+    case 'start':
+      startRecognition(data.deviceId, data.speaker, data.lang);
+      break;
+    case 'stop':
+      cleanup();
+      break;
+  }
+});
+
+// 準備完了を親へ通知
+send({ type: 'ready' });
+</script>
+</body>
+</html>

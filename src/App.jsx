@@ -4,7 +4,7 @@ const DIFY_API_URL = "https://api.dify.ai/v1/chat-messages";
 const DIFY_API_KEY = "app-3FRus6A0PmVdDo8oFDT2r90G";
 
 // Google Apps Script Web App URL（デプロイ後に設定）
-const GAS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbyja84BdCc8BtwTjXYujkx3Os4uW1bAQm81Ral356k232kOuh9lTVnOWes5rtqe2ojp/exec";
+const GAS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxQ6PcDCrRXk3V2E9sotdX4HDRN_ZGF-jhgKsAPGs6iCRkKc4oqfxu8TTBHzjzJhh4F/exec";
 
 const MOCK_KB = [
   {
@@ -81,6 +81,22 @@ function extractPhoneNumber(text) {
   return match ? match[0] : null;
 }
 
+// ── デバイス設定の永続化キー ──
+const DEVICE_SETTINGS_KEY = "audio_device_settings";
+
+function loadDeviceSettings() {
+  try {
+    const raw = localStorage.getItem(DEVICE_SETTINGS_KEY);
+    return raw ? JSON.parse(raw) : { operatorDeviceId: "", customerDeviceId: "", dualMode: false };
+  } catch {
+    return { operatorDeviceId: "", customerDeviceId: "", dualMode: false };
+  }
+}
+
+function saveDeviceSettings(settings) {
+  localStorage.setItem(DEVICE_SETTINGS_KEY, JSON.stringify(settings));
+}
+
 const SESSION_KEY = "operator_session";
 const SESSION_TTL = 6 * 60 * 60 * 1000; // 6時間
 
@@ -140,6 +156,16 @@ export default function App() {
     callback_assignee: "",
     operator: "",
   });
+  // ── デバイス選択 ──
+  const [audioDevices, setAudioDevices] = useState([]);
+  const [operatorDeviceId, setOperatorDeviceId] = useState(() => loadDeviceSettings().operatorDeviceId);
+  const [customerDeviceId, setCustomerDeviceId] = useState(() => loadDeviceSettings().customerDeviceId);
+  const [dualMode, setDualMode] = useState(() => loadDeviceSettings().dualMode);
+  const [showDeviceSettings, setShowDeviceSettings] = useState(false);
+  const operatorIframeRef = useRef(null);
+  const customerIframeRef = useRef(null);
+  const customerInterimRef = useRef("");
+
   const debugModeRef = useRef(false);
   const transcriptRef = useRef(null);
   const timerRef = useRef(null);
@@ -155,6 +181,30 @@ export default function App() {
   const audioContextRef = useRef(null);
   const micStreamRef = useRef(null);
   const callActiveRef = useRef(false);
+
+  // ── オーディオデバイスの列挙 ──
+  useEffect(() => {
+    async function enumerateDevices() {
+      try {
+        // 権限取得のために一度getUserMediaを呼ぶ（デバイスラベルが取得できるようになる）
+        const tempStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        tempStream.getTracks().forEach(t => t.stop());
+
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const audioInputs = devices.filter(d => d.kind === "audioinput");
+        setAudioDevices(audioInputs);
+      } catch {
+        // マイク権限がない場合はデバイス列挙できないが、通常の認識は動く
+        setAudioDevices([]);
+      }
+    }
+    if (isLoggedIn) enumerateDevices();
+  }, [isLoggedIn]);
+
+  // ── デバイス設定の永続化 ──
+  useEffect(() => {
+    saveDeviceSettings({ operatorDeviceId, customerDeviceId, dualMode });
+  }, [operatorDeviceId, customerDeviceId, dualMode]);
 
   useEffect(() => {
     if (transcriptRef.current) {
@@ -329,18 +379,26 @@ ${fullText}`,
 
   const scheduleDifyCall = useCallback((lines, interim = "") => {
     clearTimeout(difyTimerRef.current);
-    const fullText = lines.map(l => l.text).join("\n") + (interim ? "\n" + interim : "");
+    const fullText = lines.map(l => {
+      const label = l.speaker === "operator" ? "[OP]" : "[CU]";
+      return `${label} ${l.text}`;
+    }).join("\n") + (interim ? "\n" + interim : "");
     difyTimerRef.current = setTimeout(() => callDifyAPI(fullText), 500);
   }, [callDifyAPI]);
 
-  const addLine = (text) => {
+  const addLine = (text, speaker = "customer") => {
     // 電話番号をローカル即時抽出（手入力済みなら上書きしない）
     const phone = extractPhoneNumber(text);
     if (phone && !manualFieldsRef.current.has("callback_number")) {
       setEditableSummary(prev => prev.callback_number ? prev : { ...prev, callback_number: phone });
     }
     setTranscript(prev => {
-      const lines = [...prev, { id: Date.now() + Math.random(), text, ts: new Date().toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit",second:"2-digit"}) }];
+      const lines = [...prev, {
+        id: Date.now() + Math.random(),
+        text,
+        speaker,
+        ts: new Date().toLocaleTimeString("ja-JP", {hour:"2-digit",minute:"2-digit",second:"2-digit"}),
+      }];
       transcriptLinesRef.current = lines;
       const fullText = lines.map(l => l.text).join(" ");
       const found = searchKB(fullText);
@@ -353,6 +411,65 @@ ${fullText}`,
     });
   };
 
+  // ── iframe からの postMessage を処理 ──
+  useEffect(() => {
+    const handleWorkerMessage = (event) => {
+      const data = event.data;
+      if (!data || !data.type) return;
+
+      const addDebug = (msg) => {
+        if (!debugModeRef.current) return;
+        const ts = new Date().toLocaleTimeString("ja-JP", { hour:"2-digit", minute:"2-digit", second:"2-digit" });
+        setSpeechDebug(prev => [...prev.slice(-19), `${ts} ${msg}`]);
+      };
+
+      const speakerLabel = data.speaker === "operator" ? "OP" : "CU";
+
+      switch (data.type) {
+        case "result":
+          if (data.isFinal) {
+            addDebug(`📝 [${speakerLabel}] final: "${data.text}"`);
+            if (data.speaker === "customer") {
+              customerInterimRef.current = "";
+            } else {
+              interimRef.current = "";
+            }
+            setInterimText("");
+            addLine(data.text, data.speaker);
+          } else {
+            addDebug(`... [${speakerLabel}] interim: "${data.text}"`);
+            if (data.speaker === "customer") {
+              customerInterimRef.current = data.text;
+            } else {
+              interimRef.current = data.text;
+            }
+            setInterimText(data.text);
+            // interimでもKB検索+Dify APIを実行
+            const found = searchKB(data.text);
+            if (found.length > 0) {
+              setAnimateResult(false);
+              setTimeout(() => { setKbResults(found); setAnimateResult(true); }, 50);
+            }
+            scheduleDifyCall(transcriptLinesRef.current, data.text);
+          }
+          break;
+        case "error":
+          addDebug(`❌ [${speakerLabel}] ${data.error}`);
+          if (data.fatal) {
+            setSpeechError(`[${data.speaker === "operator" ? "オペレーター" : "お客様"}] ${data.error}`);
+          }
+          break;
+        case "status":
+          addDebug(`ℹ️ [${speakerLabel}] ${data.status}`);
+          break;
+      }
+    };
+
+    window.addEventListener("message", handleWorkerMessage);
+    return () => window.removeEventListener("message", handleWorkerMessage);
+  }, [scheduleDifyCall]);
+
+  // ── シングルモード用: 従来のSpeechRecognition（iframeなし） ──
   const startSpeechRecognition = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SpeechRecognition) {
@@ -393,13 +510,12 @@ ${fullText}`,
           addDebug(`📝 result(final): "${finalText}"`);
           interimRef.current = "";
           setInterimText("");
-          addLine(finalText);
+          addLine(finalText, "customer");
         } else {
           const interim = event.results[i][0].transcript;
           addDebug(`... result(interim): "${interim}"`);
           interimRef.current = interim;
           setInterimText(interim);
-          // interimでもKB検索+Dify APIを実行（即答性向上）
           const found = searchKB(interim);
           if (found.length > 0) {
             setAnimateResult(false);
@@ -452,10 +568,9 @@ ${fullText}`,
 
     recognition.onend = () => {
       addDebug("⏹ end — 認識サービス終了");
-      // 未確定テキストが残っていたら確定として救出
       if (interimRef.current.trim()) {
         addDebug(`🛟 rescue interim: "${interimRef.current.trim()}"`);
-        addLine(interimRef.current.trim());
+        addLine(interimRef.current.trim(), "customer");
         interimRef.current = "";
       }
       setInterimText("");
@@ -489,6 +604,50 @@ ${fullText}`,
     }
   };
 
+  // ── デュアルモード用: iframe経由の音声認識を開始 ──
+  const startDualSpeechRecognition = () => {
+    setSpeechError("");
+    setInterimText("");
+    setSpeechDebug([]);
+
+    const basePath = import.meta.env.BASE_URL || "/";
+    const workerUrl = `${basePath}speech-worker.html`;
+
+    // オペレーター用iframe
+    const opIframe = document.createElement("iframe");
+    opIframe.src = workerUrl;
+    opIframe.style.display = "none";
+    opIframe.setAttribute("allow", "microphone");
+    document.body.appendChild(opIframe);
+    operatorIframeRef.current = opIframe;
+
+    opIframe.onload = () => {
+      opIframe.contentWindow.postMessage({
+        type: "start",
+        deviceId: operatorDeviceId || "",
+        speaker: "operator",
+        lang: "ja-JP",
+      }, "*");
+    };
+
+    // お客様用iframe
+    const cuIframe = document.createElement("iframe");
+    cuIframe.src = workerUrl;
+    cuIframe.style.display = "none";
+    cuIframe.setAttribute("allow", "microphone");
+    document.body.appendChild(cuIframe);
+    customerIframeRef.current = cuIframe;
+
+    cuIframe.onload = () => {
+      cuIframe.contentWindow.postMessage({
+        type: "start",
+        deviceId: customerDeviceId || "",
+        speaker: "customer",
+        lang: "ja-JP",
+      }, "*");
+    };
+  };
+
   const stopSpeechRecognition = () => {
     // 通話終了時は onend の rescue に任せるため interimRef はここではクリアしない
     if (recognitionRef.current) {
@@ -496,6 +655,18 @@ ${fullText}`,
       recognitionRef.current = null;
       ref.stop();
     }
+  };
+
+  const stopDualSpeechRecognition = () => {
+    [operatorIframeRef, customerIframeRef].forEach(ref => {
+      if (ref.current) {
+        try {
+          ref.current.contentWindow.postMessage({ type: "stop" }, "*");
+        } catch { /* ignore */ }
+        ref.current.remove();
+        ref.current = null;
+      }
+    });
   };
 
   const startMicMonitor = async () => {
@@ -585,7 +756,11 @@ ${fullText}`,
     manualFieldsRef.current = new Set();
     conversationIdRef.current = "";
     lastSentRef.current = "";
-    startSpeechRecognition();
+    if (dualMode && customerDeviceId) {
+      startDualSpeechRecognition();
+    } else {
+      startSpeechRecognition();
+    }
     if (debugModeRef.current) startMicMonitor();
   };
 
@@ -600,6 +775,7 @@ ${fullText}`,
     stopMicMonitor();
     clearTimeout(difyTimerRef.current);
     stopSpeechRecognition();
+    stopDualSpeechRecognition();
 
     if (currentTranscript.length === 0) return;
 
@@ -629,6 +805,13 @@ ${fullText}`,
       if (!dataToSave.summary.startsWith("要折返")) {
         dataToSave.summary = `${prefix}\n${dataToSave.summary}`;
       }
+    }
+    // 話者付き会話ログを付与
+    if (transcript.length > 0) {
+      dataToSave.conversation_log = transcript.map(l => {
+        const label = l.speaker === "operator" ? "[OP]" : "[CU]";
+        return `${l.ts} ${label} ${l.text}`;
+      }).join("\n");
     }
     const saved = await saveToSpreadsheet(dataToSave);
     setSaveStatus(saved ? "saved" : (GAS_WEBHOOK_URL ? "error" : "saved"));
@@ -953,27 +1136,35 @@ ${fullText}`,
               </div>
             ) : (
               <>
-                {transcript.map((line) => (
-                  <div key={line.id} style={{
-                    marginBottom: 14,
-                    animation: "fadeSlideIn 0.3s ease",
-                  }}>
-                    <div style={{ fontSize: 10, color: "#8892a4", marginBottom: 4 }}>
-                      {line.ts} — お客様
-                    </div>
-                    <div style={{
-                      background: "rgba(255,183,77,0.06)",
-                      border: "1px solid rgba(255,183,77,0.15)",
-                      borderRadius: 10,
-                      padding: "10px 14px",
-                      fontSize: 14,
-                      lineHeight: 1.7,
-                      color: "#e8eaf0",
+                {transcript.map((line) => {
+                  const isOp = line.speaker === "operator";
+                  return (
+                    <div key={line.id} style={{
+                      marginBottom: 14,
+                      animation: "fadeSlideIn 0.3s ease",
                     }}>
-                      {line.text}
+                      <div style={{ fontSize: 10, color: "#8892a4", marginBottom: 4 }}>
+                        {line.ts} — {isOp ? (
+                          <span style={{ color: "#64b5f6" }}>オペレーター</span>
+                        ) : (
+                          <span style={{ color: "#ffb74d" }}>お客様</span>
+                        )}
+                      </div>
+                      <div style={{
+                        background: isOp ? "rgba(100,181,246,0.06)" : "rgba(255,183,77,0.06)",
+                        border: isOp ? "1px solid rgba(100,181,246,0.15)" : "1px solid rgba(255,183,77,0.15)",
+                        borderRadius: 10,
+                        padding: "10px 14px",
+                        fontSize: 14,
+                        lineHeight: 1.7,
+                        color: "#e8eaf0",
+                        borderLeft: isOp ? "3px solid rgba(100,181,246,0.4)" : "3px solid rgba(255,183,77,0.4)",
+                      }}>
+                        {line.text}
+                      </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
                 {interimText && (
                   <div style={{ marginBottom: 14 }}>
                     <div style={{ fontSize: 10, color: "#8892a4", marginBottom: 4 }}>
@@ -1330,7 +1521,9 @@ ${fullText}`,
         justifyContent: "space-between",
       }}>
         <div style={{ fontSize: 11, color: "#8892a4" }}>
-          {callActive ? `通話中 — テキスト ${transcript.length} 件認識` : "待機中 — F2で通話開始"}
+          {callActive
+            ? `通話中${dualMode ? "（2ch分離）" : ""} — テキスト ${transcript.length} 件認識`
+            : "待機中 — F2で通話開始"}
         </div>
         <div style={{ display: "flex", gap: 12 }}>
           {!callActive ? (
@@ -1377,6 +1570,18 @@ ${fullText}`,
           }}>
             クリア
           </button>
+          <button onClick={() => setShowDeviceSettings(s => !s)} disabled={callActive} style={{
+            background: showDeviceSettings ? "rgba(171,71,188,0.15)" : "rgba(255,255,255,0.06)",
+            border: showDeviceSettings ? "1px solid rgba(171,71,188,0.4)" : "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 10,
+            padding: "10px 14px",
+            color: showDeviceSettings ? "#ab47bc" : "#8892a4",
+            fontSize: 12,
+            cursor: callActive ? "not-allowed" : "pointer",
+            opacity: callActive ? 0.5 : 1,
+          }}>
+            🎧 音声設定
+          </button>
           <button onClick={toggleDebug} style={{
             background: debugMode ? "rgba(100,181,246,0.15)" : "rgba(255,255,255,0.06)",
             border: debugMode ? "1px solid rgba(100,181,246,0.4)" : "1px solid rgba(255,255,255,0.1)",
@@ -1390,6 +1595,154 @@ ${fullText}`,
           </button>
         </div>
       </div>
+
+      {/* Audio Device Settings Panel */}
+      {showDeviceSettings && (
+        <div style={{
+          position: "fixed",
+          bottom: 60,
+          right: 24,
+          zIndex: 200,
+          background: "#111d3d",
+          border: "1px solid rgba(171,71,188,0.3)",
+          borderRadius: 14,
+          padding: "20px 24px",
+          width: 380,
+          boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+          animation: "fadeSlideIn 0.3s ease",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#ab47bc", letterSpacing: "0.05em" }}>
+              🎧 音声デバイス設定
+            </div>
+            <button onClick={() => setShowDeviceSettings(false)} style={{
+              background: "none", border: "none", color: "#8892a4", fontSize: 16, cursor: "pointer",
+            }}>✕</button>
+          </div>
+
+          {/* デュアルモード切替 */}
+          <div style={{
+            display: "flex", alignItems: "center", gap: 12, marginBottom: 16,
+            padding: "10px 14px",
+            background: dualMode ? "rgba(171,71,188,0.08)" : "rgba(255,255,255,0.03)",
+            border: dualMode ? "1px solid rgba(171,71,188,0.25)" : "1px solid rgba(255,255,255,0.08)",
+            borderRadius: 10,
+            cursor: "pointer",
+          }} onClick={() => setDualMode(d => !d)}>
+            <div style={{
+              width: 38, height: 20, borderRadius: 10,
+              background: dualMode ? "#ab47bc" : "rgba(255,255,255,0.15)",
+              position: "relative", transition: "background 0.2s",
+            }}>
+              <div style={{
+                width: 16, height: 16, borderRadius: "50%",
+                background: "#fff",
+                position: "absolute", top: 2,
+                left: dualMode ? 20 : 2,
+                transition: "left 0.2s",
+              }}/>
+            </div>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#e8eaf0" }}>
+                2ch 音声分離モード
+              </div>
+              <div style={{ fontSize: 10, color: "#8892a4", marginTop: 2 }}>
+                オペレーターとお客様の音声を分離して認識
+              </div>
+            </div>
+          </div>
+
+          {/* デバイス選択 */}
+          {audioDevices.length === 0 ? (
+            <div style={{ fontSize: 11, color: "#8892a4", textAlign: "center", padding: "12px 0" }}>
+              オーディオデバイスが検出されませんでした。<br/>マイクの権限を許可してページをリロードしてください。
+            </div>
+          ) : (
+            <>
+              <div style={{ marginBottom: 12 }}>
+                <label style={{ fontSize: 10, color: "#64b5f6", letterSpacing: "0.08em", marginBottom: 6, display: "block" }}>
+                  🎤 オペレーター マイク {!dualMode && <span style={{ color: "#8892a4" }}>（シングルモード: メインマイク）</span>}
+                </label>
+                <select
+                  value={operatorDeviceId}
+                  onChange={e => setOperatorDeviceId(e.target.value)}
+                  style={{
+                    width: "100%",
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(100,181,246,0.25)",
+                    borderRadius: 8,
+                    padding: "8px 10px",
+                    color: "#e8eaf0",
+                    fontSize: 12,
+                    outline: "none",
+                    appearance: "none",
+                  }}
+                >
+                  <option value="" style={{ background: "#111d3d" }}>（デフォルトデバイス）</option>
+                  {audioDevices.map(d => (
+                    <option key={d.deviceId} value={d.deviceId} style={{ background: "#111d3d" }}>
+                      {d.label || `デバイス ${d.deviceId.slice(0, 8)}...`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {dualMode && (
+                <div style={{ marginBottom: 12 }}>
+                  <label style={{ fontSize: 10, color: "#ffb74d", letterSpacing: "0.08em", marginBottom: 6, display: "block" }}>
+                    📞 お客様音声（VB-CABLE等の仮想デバイス）
+                  </label>
+                  <select
+                    value={customerDeviceId}
+                    onChange={e => setCustomerDeviceId(e.target.value)}
+                    style={{
+                      width: "100%",
+                      background: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,183,77,0.25)",
+                      borderRadius: 8,
+                      padding: "8px 10px",
+                      color: "#e8eaf0",
+                      fontSize: 12,
+                      outline: "none",
+                      appearance: "none",
+                    }}
+                  >
+                    <option value="" style={{ background: "#111d3d" }}>（デバイスを選択）</option>
+                    {audioDevices.map(d => (
+                      <option key={d.deviceId} value={d.deviceId} style={{ background: "#111d3d" }}>
+                        {d.label || `デバイス ${d.deviceId.slice(0, 8)}...`}
+                      </option>
+                    ))}
+                  </select>
+                  {!customerDeviceId && (
+                    <div style={{ fontSize: 10, color: "#ef5350", marginTop: 4 }}>
+                      お客様用デバイスを選択してください（VB-CABLE Output等）
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {dualMode && (
+                <div style={{
+                  padding: "10px 12px",
+                  background: "rgba(255,183,77,0.06)",
+                  border: "1px solid rgba(255,183,77,0.15)",
+                  borderRadius: 8,
+                  fontSize: 10,
+                  color: "#8892a4",
+                  lineHeight: 1.7,
+                }}>
+                  <strong style={{ color: "#ffb74d" }}>セットアップ手順:</strong><br/>
+                  1. VB-CABLE をインストール<br/>
+                  2. Smart PBX の出力先を「CABLE Input」に設定<br/>
+                  3. Windows サウンド設定で「CABLE Output」→「このデバイスを聴く」を有効化<br/>
+                  4. 上のドロップダウンで「CABLE Output」を選択
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      )}
 
       {/* Call Summary Modal */}
       {showSummaryModal && (

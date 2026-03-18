@@ -16,7 +16,7 @@
 var SHEET_NAME = "通話記録";
 
 /**
- * 見出し定義（9項目）
+ * 見出し定義（10項目）
  */
 var HEADERS = [
   "タイムコード",
@@ -28,6 +28,7 @@ var HEADERS = [
   "契約住所",
   "折返担当者",
   "受領者",
+  "会話ログ",
 ];
 
 /**
@@ -62,6 +63,7 @@ function initialSetup() {
   sheet.setColumnWidth(7, 250); // 契約住所
   sheet.setColumnWidth(8, 150); // 折返担当者
   sheet.setColumnWidth(9, 120); // 受領者
+  sheet.setColumnWidth(10, 500); // 会話ログ
 
   // 1行目を固定
   sheet.setFrozenRows(1);
@@ -95,6 +97,7 @@ function doPost(e) {
       data.contract_address || "",
       data.callback_assignee || "",
       data.operator || "",
+      data.conversation_log || "",
     ];
 
     sheet.appendRow(row);
