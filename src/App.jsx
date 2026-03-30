@@ -1241,11 +1241,6 @@ ${fullText}`,
         setSaveStatus("");
         setShowSummaryModal(true);
 
-        // 3秒後に電話応対マネージャーに切り替え
-        await delay(3000);
-        if (!testCallAbortRef.current) {
-          setAppView("manager");
-        }
       } else {
         setCallActive(false);
         callActiveRef.current = false;
