@@ -233,7 +233,7 @@ function doPost(e) {
     var cbMemo = (data.category ? data.category + "：" : "") + summary;
     var cbRow = [
       cbId,
-      String(data.callback_number || ""),
+      normalizePhone_(data.callback_number),
       callerName,
       data.callback_assignee || data.operator || "",
       cbMemo,
@@ -274,6 +274,13 @@ function getCallbackSheet_() {
 }
 
 /**
+ * 電話番号を正規化（ハイフン・スペース除去）
+ */
+function normalizePhone_(phone) {
+  return String(phone || "").replace(/[-\s\u3000ー]/g, "");
+}
+
+/**
  * JSONレスポンスを生成
  */
 function jsonResponse_(obj) {
@@ -292,7 +299,7 @@ function handleAddCallback_(data) {
 
   var row = [
     id,
-    String(data.phone || ""),
+    normalizePhone_(data.phone),
     data.customer_name || "",
     data.assignee || "",
     data.memo || "",
@@ -322,7 +329,7 @@ function handleUpdateCallback_(data) {
     if (String(rows[i][0]) === targetId) {
       var rowIndex = i + 1; // シートは1始まり
       var oldStatus = rows[i][6];
-      if (data.phone !== undefined)         { var cell = sheet.getRange(rowIndex, 2); cell.setNumberFormat("@"); cell.setValue(String(data.phone)); }
+      if (data.phone !== undefined)         { var cell = sheet.getRange(rowIndex, 2); cell.setNumberFormat("@"); cell.setValue(normalizePhone_(data.phone)); }
       if (data.customer_name !== undefined)  sheet.getRange(rowIndex, 3).setValue(data.customer_name);
       if (data.assignee !== undefined)       sheet.getRange(rowIndex, 4).setValue(data.assignee);
       if (data.memo !== undefined)           sheet.getRange(rowIndex, 5).setValue(data.memo);
