@@ -301,6 +301,7 @@ function handleUpdateCallback_(data) {
   for (var i = 1; i < rows.length; i++) {
     if (String(rows[i][0]) === targetId) {
       var rowIndex = i + 1; // シートは1始まり
+      var oldStatus = rows[i][6];
       if (data.phone !== undefined)         { var cell = sheet.getRange(rowIndex, 2); cell.setNumberFormat("@"); cell.setValue(String(data.phone)); }
       if (data.customer_name !== undefined)  sheet.getRange(rowIndex, 3).setValue(data.customer_name);
       if (data.assignee !== undefined)       sheet.getRange(rowIndex, 4).setValue(data.assignee);
@@ -308,6 +309,22 @@ function handleUpdateCallback_(data) {
       if (data.status !== undefined)         sheet.getRange(rowIndex, 7).setValue(data.status);
       // 更新日時を記録
       sheet.getRange(rowIndex, 8).setValue(new Date().toISOString());
+
+      // ステータス変更時はログエントリを自動追加
+      if (data.status !== undefined && data.status !== oldStatus) {
+        var phone = String(rows[i][1]);
+        var customerName = rows[i][2];
+        var statusLabel = data.status === "done" ? "対応済みに変更" : "未対応に変更";
+        var logMemo = "【ステータス変更】" + statusLabel + (data.operator ? "（" + data.operator + "）" : "");
+        var logId = String(Date.now());
+        var now = new Date().toISOString();
+        var logRow = [logId, phone, customerName, data.operator || "", logMemo, now, data.status, now];
+        var logNewRow = sheet.getLastRow() + 1;
+        var logRange = sheet.getRange(logNewRow, 1, 1, logRow.length);
+        logRange.setNumberFormat("@");
+        logRange.setValues([logRow]);
+      }
+
       return jsonResponse_({ success: true });
     }
   }
