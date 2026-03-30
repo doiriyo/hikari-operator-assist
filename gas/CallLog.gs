@@ -6,10 +6,12 @@
  * 2. 拡張機能 → Apps Script を開く
  * 3. このファイルの内容を貼り付ける
  * 4. initialSetup() を一度実行して見出し行を作成
- * 5. デプロイ → 新しいデプロイ → ウェブアプリ
+ * 5. Apps Script エディタ → プロジェクトの設定 → スクリプトプロパティ
+ *    キー: API_KEY  値: （生成したAPIキー）
+ * 6. デプロイ → 新しいデプロイ → ウェブアプリ
  *    - 実行ユーザー: 自分
  *    - アクセス: 全員
- * 6. 発行された URL を App.jsx の GAS_WEBHOOK_URL に設定
+ * 7. 発行された URL と API_KEY をアプリ側の環境変数に設定
  */
 
 /** シート名 */
@@ -148,6 +150,14 @@ function initialSetup() {
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
+
+    // --- APIキー認証 ---
+    var expectedKey = PropertiesService.getScriptProperties().getProperty("API_KEY");
+    if (expectedKey && data.api_key !== expectedKey) {
+      return ContentService
+        .createTextOutput(JSON.stringify({ status: "error", message: "Unauthorized" }))
+        .setMimeType(ContentService.MimeType.JSON);
+    }
 
     // --- コールバック管理アクションの分岐 ---
     var action = data.action || "";

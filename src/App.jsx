@@ -5,11 +5,10 @@ import { normalizeAddress, loadCustomCorrections, addCustomCorrection, removeCus
 // Electron 環境検出 — true のとき Whisper ローカル文字起こしを使用
 const isElectron = window.electronAPI?.isElectron ?? false;
 
-const DIFY_API_URL = "https://api.dify.ai/v1/chat-messages";
-const DIFY_API_KEY = "app-3FRus6A0PmVdDo8oFDT2r90G";
-
-// Google Apps Script Web App URL（デプロイ後に設定）
-const GAS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwyP5vvMfZ-Q-UQQouZWtfux95TlbnooVDLhZLrhLKvp5L4ql3eNDK5YncF3EcvbyX9/exec";
+const DIFY_API_URL = import.meta.env.VITE_DIFY_API_URL || "https://api.dify.ai/v1/chat-messages";
+const DIFY_API_KEY = import.meta.env.VITE_DIFY_API_KEY || "";
+const GAS_WEBHOOK_URL = import.meta.env.VITE_GAS_URL || "";
+const GAS_API_KEY = import.meta.env.VITE_GAS_API_KEY || "";
 
 const MOCK_KB = [
   {
@@ -255,7 +254,7 @@ export default function App() {
       const res = await fetch(GAS_WEBHOOK_URL, {
         method: "POST",
         headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ action: "get_callbacks" }),
+        body: JSON.stringify({ action: "get_callbacks", api_key: GAS_API_KEY }),
       });
       const data = await res.json();
       setCbRecords(data.records || []);
@@ -283,6 +282,7 @@ export default function App() {
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify({
           action: "add_callback",
+          api_key: GAS_API_KEY,
           phone: cbPhone,
           customer_name: cbCustomerName,
           assignee: cbAssignee,
@@ -301,7 +301,7 @@ export default function App() {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ action: "update_callback", id, status: "done" }),
+        body: JSON.stringify({ action: "update_callback", api_key: GAS_API_KEY, id, status: "done" }),
       });
       setTimeout(loadCallbacks, 1500);
     } catch { /* no-cors */ }
@@ -539,7 +539,7 @@ ${fullText}`,
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify(data),
+        body: JSON.stringify({ ...data, api_key: GAS_API_KEY }),
       });
       // no-corsモードではレスポンスが不透明になるため、送信成功とみなす
       return true;
