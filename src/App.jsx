@@ -9,7 +9,7 @@ const DIFY_API_URL = "https://api.dify.ai/v1/chat-messages";
 const DIFY_API_KEY = "app-3FRus6A0PmVdDo8oFDT2r90G";
 
 // Google Apps Script Web App URL（デプロイ後に設定）
-const GAS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbxQ6PcDCrRXk3V2E9sotdX4HDRN_ZGF-jhgKsAPGs6iCRkKc4oqfxu8TTBHzjzJhh4F/exec";
+const GAS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycby6a0xtKig4xdu6_iaWRhW-qBByfjUj9svID5ySt9X8FUpiMj9N2zUhHcdc9gnF3seV/exec";
 
 const MOCK_KB = [
   {
@@ -176,6 +176,18 @@ export default function App() {
   const [correctionTo, setCorrectionTo] = useState("");
   const [triggerEnabled, setTriggerEnabled] = useState(() => loadDeviceSettings().triggerEnabled ?? false);
   const [triggerDeviceId, setTriggerDeviceId] = useState(() => loadDeviceSettings().triggerDeviceId ?? "");
+  // ── コールバック管理タブ ──
+  const [rightTab, setRightTab] = useState("record"); // "record" | "callback"
+  const [cbRecords, setCbRecords] = useState([]);
+  const [cbLoading, setCbLoading] = useState(false);
+  const [cbFilterPending, setCbFilterPending] = useState(true);
+  const [cbSearch, setCbSearch] = useState("");
+  const [cbPhone, setCbPhone] = useState("");
+  const [cbCustomerName, setCbCustomerName] = useState("");
+  const [cbAssignee, setCbAssignee] = useState("");
+  const [cbMemo, setCbMemo] = useState("");
+  const [cbSubmitting, setCbSubmitting] = useState(false);
+  const lastPhoneTimestampRef = useRef(null);
   const operatorIframeRef = useRef(null);
   const customerIframeRef = useRef(null);
   const customerInterimRef = useRef("");
@@ -235,6 +247,84 @@ export default function App() {
   useEffect(() => {
     saveDeviceSettings({ operatorDeviceId, customerDeviceId, dualMode, triggerEnabled, triggerDeviceId });
   }, [operatorDeviceId, customerDeviceId, dualMode, triggerEnabled, triggerDeviceId]);
+
+  // ── コールバック管理: データ取得 ──
+  const loadCallbacks = useCallback(async () => {
+    try {
+      setCbLoading(true);
+      const res = await fetch(GAS_WEBHOOK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ action: "get_callbacks" }),
+      });
+      const data = await res.json();
+      setCbRecords(data.records || []);
+    } catch {
+      // GAS未設定時等は静かに無視
+    } finally {
+      setCbLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    loadCallbacks();
+    const iv = setInterval(loadCallbacks, 30000);
+    return () => clearInterval(iv);
+  }, [isLoggedIn, loadCallbacks]);
+
+  const handleCbSubmit = async () => {
+    if (!cbPhone || !cbCustomerName || !cbAssignee || !cbMemo) return;
+    setCbSubmitting(true);
+    try {
+      await fetch(GAS_WEBHOOK_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({
+          action: "add_callback",
+          phone: cbPhone,
+          customer_name: cbCustomerName,
+          assignee: cbAssignee,
+          memo: cbMemo,
+        }),
+      });
+      setCbPhone(""); setCbCustomerName(""); setCbAssignee(""); setCbMemo("");
+      setTimeout(loadCallbacks, 1500);
+    } catch { /* no-cors */ }
+    finally { setCbSubmitting(false); }
+  };
+
+  const handleCbDone = async (id) => {
+    try {
+      await fetch(GAS_WEBHOOK_URL, {
+        method: "POST",
+        mode: "no-cors",
+        headers: { "Content-Type": "text/plain" },
+        body: JSON.stringify({ action: "update_callback", id, status: "done" }),
+      });
+      setTimeout(loadCallbacks, 1500);
+    } catch { /* no-cors */ }
+  };
+
+  // ── phone-watcher 連携: 3秒ポーリング ──
+  useEffect(() => {
+    if (!isLoggedIn) return;
+    const iv = setInterval(async () => {
+      try {
+        const res = await fetch("http://localhost:3456/latest-call");
+        const data = await res.json();
+        if (data.phone && data.timestamp && data.timestamp !== lastPhoneTimestampRef.current) {
+          lastPhoneTimestampRef.current = data.timestamp;
+          setRightTab("callback");
+          setCbPhone(data.phone);
+          setCbSearch(data.phone);
+          fetch("http://localhost:3456/clear", { method: "POST" }).catch(() => {});
+        }
+      } catch { /* phone-watcher未起動 — 静かに無視 */ }
+    }, 3000);
+    return () => clearInterval(iv);
+  }, [isLoggedIn]);
 
   useEffect(() => {
     if (transcriptRef.current) {
@@ -1707,7 +1797,7 @@ ${fullText}`,
           </div>
         </div>
 
-        {/* Right: Record Form Panel */}
+        {/* Right: Record Form / Callback Panel */}
         <div style={{
           width: "25%",
           minWidth: 260,
@@ -1715,14 +1805,45 @@ ${fullText}`,
           flexDirection: "column",
           overflow: "hidden",
         }}>
+          {/* Tab Header */}
           <div style={{
-            padding: "14px 20px 12px",
+            display: "flex",
             borderBottom: "1px solid rgba(255,255,255,0.06)",
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "#8892a4" }}>
-              ▌ 通話記録
-            </div>
+            {[
+              { id: "record", label: "通話記録" },
+              { id: "callback", label: "コールバック" },
+            ].map(tab => (
+              <button key={tab.id} onClick={() => setRightTab(tab.id)} style={{
+                flex: 1,
+                padding: "12px 0",
+                background: rightTab === tab.id ? "rgba(255,183,77,0.08)" : "transparent",
+                border: "none",
+                borderBottom: rightTab === tab.id ? "2px solid #ffb74d" : "2px solid transparent",
+                color: rightTab === tab.id ? "#ffb74d" : "#8892a4",
+                fontSize: 11,
+                fontWeight: 700,
+                letterSpacing: "0.08em",
+                cursor: "pointer",
+              }}>
+                {tab.label}
+                {tab.id === "callback" && cbRecords.filter(r => r.status === "pending").length > 0 && (
+                  <span style={{
+                    marginLeft: 6,
+                    background: "#ef5350",
+                    color: "#fff",
+                    fontSize: 9,
+                    padding: "1px 5px",
+                    borderRadius: 8,
+                    fontWeight: 700,
+                  }}>{cbRecords.filter(r => r.status === "pending").length}</span>
+                )}
+              </button>
+            ))}
           </div>
+
+          {/* Tab: 通話記録 */}
+          {rightTab === "record" && (
           <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
             {[
               { key: "caller_name", label: "名前", icon: "👤" },
@@ -1808,6 +1929,176 @@ ${fullText}`,
               </div>
             ))}
           </div>
+          )}
+
+          {/* Tab: コールバック管理 */}
+          {rightTab === "callback" && (
+          <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 12 }}>
+            {/* サマリーカード */}
+            <div style={{ display: "flex", gap: 8 }}>
+              {[
+                { label: "未対応", value: cbRecords.filter(r => r.status === "pending").length, color: "#ef5350" },
+                { label: "本日", value: cbRecords.filter(r => (r.created_at || "").slice(0, 10) === new Date().toISOString().slice(0, 10)).length, color: "#42a5f5" },
+                { label: "対応済", value: cbRecords.filter(r => r.status === "done").length, color: "#66bb6a" },
+              ].map(c => (
+                <div key={c.label} style={{
+                  flex: 1,
+                  background: "rgba(255,255,255,0.04)",
+                  border: "1px solid rgba(255,255,255,0.08)",
+                  borderRadius: 8,
+                  padding: "8px 0",
+                  textAlign: "center",
+                  borderTop: `2px solid ${c.color}`,
+                }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: c.color }}>{c.value}</div>
+                  <div style={{ fontSize: 9, color: "#8892a4" }}>{c.label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* 新規登録フォーム */}
+            <div style={{
+              background: "rgba(255,255,255,0.03)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              borderRadius: 10,
+              padding: 12,
+            }}>
+              <div style={{ fontSize: 10, color: "#8892a4", fontWeight: 700, letterSpacing: "0.08em", marginBottom: 8 }}>
+                新規コールバック登録
+              </div>
+              {[
+                { value: cbPhone, set: setCbPhone, placeholder: "電話番号 *", type: "tel" },
+                { value: cbCustomerName, set: setCbCustomerName, placeholder: "顧客名 *" },
+                { value: cbAssignee, set: setCbAssignee, placeholder: "担当者名 *" },
+              ].map((f, i) => (
+                <input key={i} value={f.value} onChange={e => f.set(e.target.value)} placeholder={f.placeholder} type={f.type || "text"} style={{
+                  width: "100%",
+                  background: "rgba(255,255,255,0.05)",
+                  border: "1px solid rgba(255,255,255,0.1)",
+                  borderRadius: 6,
+                  padding: "7px 10px",
+                  color: "#e8eaf0",
+                  fontSize: 12,
+                  outline: "none",
+                  boxSizing: "border-box",
+                  marginBottom: 6,
+                }} />
+              ))}
+              <textarea value={cbMemo} onChange={e => setCbMemo(e.target.value)} placeholder="用件メモ *" rows={2} style={{
+                width: "100%",
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 6,
+                padding: "7px 10px",
+                color: "#e8eaf0",
+                fontSize: 12,
+                outline: "none",
+                resize: "vertical",
+                fontFamily: "inherit",
+                boxSizing: "border-box",
+                marginBottom: 6,
+              }} />
+              <button onClick={handleCbSubmit} disabled={cbSubmitting || !cbPhone || !cbCustomerName || !cbAssignee || !cbMemo} style={{
+                width: "100%",
+                padding: "8px 0",
+                background: "linear-gradient(135deg, #ffb74d, #ff8f00)",
+                border: "none",
+                borderRadius: 6,
+                color: "#0a0f1e",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: cbSubmitting ? "wait" : "pointer",
+                opacity: (!cbPhone || !cbCustomerName || !cbAssignee || !cbMemo) ? 0.5 : 1,
+              }}>
+                {cbSubmitting ? "登録中..." : "登録する"}
+              </button>
+            </div>
+
+            {/* フィルター・検索 */}
+            <div style={{ display: "flex", gap: 6 }}>
+              <div style={{ display: "flex", borderRadius: 6, overflow: "hidden", border: "1px solid rgba(255,255,255,0.1)" }}>
+                <button onClick={() => setCbFilterPending(true)} style={{
+                  padding: "5px 10px", border: "none", fontSize: 10, cursor: "pointer",
+                  background: cbFilterPending ? "rgba(255,183,77,0.2)" : "transparent",
+                  color: cbFilterPending ? "#ffb74d" : "#8892a4",
+                }}>未対応</button>
+                <button onClick={() => setCbFilterPending(false)} style={{
+                  padding: "5px 10px", border: "none", fontSize: 10, cursor: "pointer",
+                  background: !cbFilterPending ? "rgba(255,183,77,0.2)" : "transparent",
+                  color: !cbFilterPending ? "#ffb74d" : "#8892a4",
+                }}>全件</button>
+              </div>
+              <input value={cbSearch} onChange={e => setCbSearch(e.target.value)} placeholder="検索..." style={{
+                flex: 1,
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 6,
+                padding: "5px 8px",
+                color: "#e8eaf0",
+                fontSize: 10,
+                outline: "none",
+              }} />
+            </div>
+
+            {/* レコード一覧 */}
+            {cbLoading && cbRecords.length === 0 && (
+              <div style={{ textAlign: "center", color: "#8892a4", fontSize: 11, padding: 16 }}>読み込み中...</div>
+            )}
+            {(() => {
+              const filtered = cbRecords.filter(r => {
+                if (cbFilterPending && r.status !== "pending") return false;
+                if (cbSearch) {
+                  const q = cbSearch.toLowerCase();
+                  if (!(r.phone || "").toLowerCase().includes(q) && !(r.customer_name || "").toLowerCase().includes(q)) return false;
+                }
+                return true;
+              });
+              if (filtered.length === 0 && !cbLoading) {
+                return <div style={{ textAlign: "center", color: "#8892a4", fontSize: 11, padding: 16 }}>該当なし</div>;
+              }
+              return filtered.map(r => {
+                const isMatch = cbSearch && ((r.phone || "").includes(cbSearch) || (r.customer_name || "").includes(cbSearch));
+                return (
+                <div key={r.id} style={{
+                  padding: 10,
+                  background: isMatch ? "rgba(255,183,77,0.08)" : "rgba(255,255,255,0.02)",
+                  border: isMatch ? "1px solid rgba(255,183,77,0.3)" : "1px solid rgba(255,255,255,0.06)",
+                  borderRadius: 8,
+                  borderLeft: r.status === "pending" ? "3px solid #ef5350" : "3px solid #66bb6a",
+                }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: "#e8eaf0" }}>{r.customer_name}</span>
+                    <span style={{
+                      fontSize: 9, padding: "1px 6px", borderRadius: 6, fontWeight: 600,
+                      background: r.status === "pending" ? "rgba(239,83,80,0.15)" : "rgba(102,187,106,0.15)",
+                      color: r.status === "pending" ? "#ef5350" : "#66bb6a",
+                    }}>{r.status === "pending" ? "未対応" : "対応済"}</span>
+                  </div>
+                  <div style={{ fontSize: 11, color: "#64b5f6", marginBottom: 3 }}>{r.phone}</div>
+                  <div style={{ fontSize: 10, color: "#8892a4", marginBottom: 3 }}>
+                    担当: {r.assignee} | {(r.created_at || "").replace("T", " ").slice(0, 16)}
+                  </div>
+                  <div style={{ fontSize: 11, color: "#a0aab8", whiteSpace: "pre-wrap", marginBottom: 6 }}>{r.memo}</div>
+                  {r.status === "pending" && (
+                    <button onClick={() => handleCbDone(r.id)} style={{
+                      width: "100%",
+                      padding: "5px 0",
+                      background: "transparent",
+                      border: "1px solid rgba(239,83,80,0.4)",
+                      borderRadius: 6,
+                      color: "#ef5350",
+                      fontSize: 10,
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}>対応済みにする</button>
+                  )}
+                </div>
+                );
+              });
+            })()}
+          </div>
+          )}
+
         </div>
       </div>
 
