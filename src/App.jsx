@@ -1419,14 +1419,17 @@ ${fullText}`,
         </div>
       </header>
 
-      {/* Manager View — 常時保持、display切替で瞬時表示 */}
+      {/* Manager View — ログイン後に常時保持、display切替で瞬時表示 */}
+      {isLoggedIn && (
       <div style={{ flex: 1, overflow: "hidden", display: appView === "manager" ? "block" : "none" }}>
         <iframe
+          key={operatorName}
           src={`https://asotwc.org/call-m/?operator=${encodeURIComponent(operatorName)}`}
           style={{ width: "100%", height: "100%", border: "none", background: "#2a2d35" }}
           title="TWC電話応対マネージャー"
         />
       </div>
+      )}
 
       {/* Assist View */}
       {appView === "assist" && (<>
