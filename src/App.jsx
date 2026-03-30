@@ -1773,9 +1773,20 @@ ${fullText}`,
                 </span>
               ))}
               {aiLoading && (
-                <span style={{ fontSize: 10, color: "#64b5f6", animation: "blink 1s infinite" }}>
-                  AI分析中...
-                </span>
+                <button onClick={() => {
+                  difyAbortRef.current?.abort();
+                  setAiLoading(false);
+                }} style={{
+                  background: "rgba(239,83,80,0.1)",
+                  border: "1px solid rgba(239,83,80,0.3)",
+                  borderRadius: 6,
+                  padding: "3px 10px",
+                  cursor: "pointer",
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: "#ef5350",
+                  animation: "blink 1s infinite",
+                }}>⏹ AI分析中... クリックで停止</button>
               )}
             </div>
           </div>
