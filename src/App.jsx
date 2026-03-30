@@ -1426,7 +1426,6 @@ ${fullText}`,
               onKeyDown={e => {
                 if (e.key === "Enter" && quickPhone.trim()) {
                   lookupPhone(quickPhone.trim());
-                  setQuickPhone("");
                 }
               }}
               placeholder="着信番号を入力"
@@ -1445,7 +1444,6 @@ ${fullText}`,
               onClick={() => {
                 if (quickPhone.trim()) {
                   lookupPhone(quickPhone.trim());
-                  setQuickPhone("");
                 }
               }}
               style={{
@@ -2257,6 +2255,8 @@ ${fullText}`,
             manualFieldsRef.current = new Set();
             conversationIdRef.current = "";
             lastSentRef.current = "";
+            setQuickPhone("");
+            setCallerInfo(null);
           }} style={{
             background: "#3a3f48",
             border: "1px solid rgba(255,255,255,0.1)",
