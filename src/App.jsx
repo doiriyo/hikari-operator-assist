@@ -9,7 +9,7 @@ const DIFY_API_URL = "https://api.dify.ai/v1/chat-messages";
 const DIFY_API_KEY = "app-3FRus6A0PmVdDo8oFDT2r90G";
 
 // Google Apps Script Web App URL（デプロイ後に設定）
-const GAS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycby6a0xtKig4xdu6_iaWRhW-qBByfjUj9svID5ySt9X8FUpiMj9N2zUhHcdc9gnF3seV/exec";
+const GAS_WEBHOOK_URL = "https://script.google.com/macros/s/AKfycbwyP5vvMfZ-Q-UQQouZWtfux95TlbnooVDLhZLrhLKvp5L4ql3eNDK5YncF3EcvbyX9/exec";
 
 const MOCK_KB = [
   {
@@ -307,13 +307,16 @@ export default function App() {
     } catch { /* no-cors */ }
   };
 
-  // ── phone-watcher 連携: 3秒ポーリング ──
+  // ── phone-watcher 連携: ポーリング（未起動時は頻度を下げる） ──
   useEffect(() => {
     if (!isLoggedIn) return;
-    const iv = setInterval(async () => {
+    let timerId = null;
+    let interval = 3000; // 初期: 3秒
+    const poll = async () => {
       try {
         const res = await fetch("http://localhost:3456/latest-call");
         const data = await res.json();
+        interval = 3000; // 接続成功 → 通常頻度に戻す
         if (data.phone && data.timestamp && data.timestamp !== lastPhoneTimestampRef.current) {
           lastPhoneTimestampRef.current = data.timestamp;
           setRightTab("callback");
@@ -321,9 +324,13 @@ export default function App() {
           setCbSearch(data.phone);
           fetch("http://localhost:3456/clear", { method: "POST" }).catch(() => {});
         }
-      } catch { /* phone-watcher未起動 — 静かに無視 */ }
-    }, 3000);
-    return () => clearInterval(iv);
+      } catch {
+        interval = 30000; // 接続失敗 → 30秒に減速
+      }
+      timerId = setTimeout(poll, interval);
+    };
+    timerId = setTimeout(poll, 3000);
+    return () => clearTimeout(timerId);
   }, [isLoggedIn]);
 
   useEffect(() => {
@@ -543,7 +550,7 @@ ${fullText}`,
   }, []);
 
   const scheduleDifyCall = useCallback((lines, interim = "") => {
-    if (!aiEnabledRef.current) return;
+    if (!aiEnabledRef.current || testCallRunningRef.current) return;
     clearTimeout(difyTimerRef.current);
     const fullText = lines.map(l => {
       const label = l.speaker === "operator" ? "[OP]" : l.speaker === "customer" ? "[CU]" : "";
@@ -1039,6 +1046,7 @@ ${fullText}`,
     const handleKeyDown = (e) => {
       if (e.key === "F2") {
         e.preventDefault();
+        if (testCallRunningRef.current) return; // テストコール中はF2無効
         if (callActiveRef.current) {
           endCall();
         } else {
@@ -1177,6 +1185,121 @@ ${fullText}`,
     if (!inputText.trim()) return;
     addLine(inputText.trim());
     setInputText("");
+  };
+
+  // ── テストコール（デモ用） ──
+  const [testCallRunning, setTestCallRunning] = useState(false);
+  const testCallRunningRef = useRef(false);
+  const testCallAbortRef = useRef(false);
+
+  const runTestCall = async () => {
+    if (callActive || testCallRunning) return;
+    setTestCallRunning(true);
+    testCallRunningRef.current = true;
+    testCallAbortRef.current = false;
+
+    try {
+      // 初期化（残留タイマー・リクエストをキャンセル）
+      clearTimeout(difyTimerRef.current);
+      difyAbortRef.current?.abort();
+      setRightTab("record");
+      setTranscript([]);
+      transcriptLinesRef.current = [];
+      setKbResults([]);
+      setAiResponse("");
+      setPinnedAiResponse("");
+      aiPinnedRef.current = false;
+      conversationIdRef.current = "";
+      lastSentRef.current = "";
+      manualFieldsRef.current = new Set();
+      setSpeechError("");
+      setInterimText("");
+      setAiLoading(false);
+      setCallActive(true);
+      callActiveRef.current = true;
+      setIsListening(true);
+      setEditableSummary({
+        timestamp: new Date().toLocaleString("ja-JP"),
+        caller_name: "", category: "", summary: "",
+        callback_number: "", contract_name: "", contract_address: "",
+        callback_assignee: "", operator: operatorName,
+      });
+
+      const testScript = [
+        { speaker: "operator", text: "お電話ありがとうございます。阿蘇ネットサポートセンターです。" },
+        { speaker: "customer", text: "すみません、インターネットが繋がらなくなったんですけど。" },
+        { speaker: "operator", text: "ご不便をおかけして申し訳ございません。状況を確認いたします。ONUのランプはどのような状態ですか？" },
+        { speaker: "customer", text: "赤いランプが点滅しています。名前は山田太郎です。" },
+        { speaker: "operator", text: "かしこまりました。山田太郎様ですね。電話番号を確認してよろしいですか？" },
+        { speaker: "customer", text: "はい、0967-34-1234です。住所は熊本県阿蘇市内牧1234番地です。" },
+        { speaker: "operator", text: "ありがとうございます。機器の再起動をご案内いたします。改善しない場合は折り返しご連絡いたします。" },
+        { speaker: "customer", text: "わかりました。折り返しは佐藤さんにお願いしたいのですが。" },
+        { speaker: "operator", text: "かしこまりました。佐藤が折り返しご連絡いたします。しばらくお待ちください。" },
+      ];
+
+      const delay = (ms) => new Promise(r => setTimeout(r, ms));
+
+      for (const line of testScript) {
+        if (testCallAbortRef.current) break;
+        await delay(1800);
+        if (testCallAbortRef.current) break;
+        addLine(line.text, line.speaker);
+      }
+
+      if (!testCallAbortRef.current) {
+        await delay(1500);
+        // 通話終了 → 要約をシミュレート
+        setCallActive(false);
+        callActiveRef.current = false;
+        setIsListening(false);
+
+        // テスト用の要約を直接設定
+        setEditableSummary(prev => ({
+          ...prev,
+          caller_name: prev.caller_name || "山田太郎",
+          category: prev.category || "接続障害",
+          summary: prev.summary || "要折返TEL：佐藤\nONUの赤ランプ点滅でインターネット接続不可。再起動案内済み。改善なければ折り返し対応。",
+          callback_number: prev.callback_number || "0967341234",
+          contract_name: prev.contract_name || "山田太郎",
+          contract_address: prev.contract_address || "熊本県阿蘇市内牧1234番地",
+          callback_assignee: prev.callback_assignee || "佐藤",
+        }));
+        setSaveStatus("");
+        setShowSummaryModal(true);
+
+        // 3秒後にコールバック管理タブへの着信をシミュレート
+        await delay(3000);
+        if (!testCallAbortRef.current) {
+          setRightTab("callback");
+          setCbPhone("0967341234");
+          setCbCustomerName("山田太郎");
+          setCbAssignee("佐藤");
+          setCbMemo("接続障害 — ONU赤ランプ点滅。再起動案内済み、改善なければ折り返し。");
+          setCbSearch("0967341234");
+        }
+      } else {
+        setCallActive(false);
+        callActiveRef.current = false;
+        setIsListening(false);
+      }
+    } catch (err) {
+      console.error("テストコールエラー:", err);
+      setCallActive(false);
+      callActiveRef.current = false;
+      setIsListening(false);
+    }
+
+    setTestCallRunning(false);
+    testCallRunningRef.current = false;
+  };
+
+  const stopTestCall = () => {
+    testCallAbortRef.current = true;
+    setCallActive(false);
+    callActiveRef.current = false;
+    setIsListening(false);
+    setTestCallRunning(false);
+    testCallRunningRef.current = false;
   };
 
   if (!isLoggedIn) {
@@ -2049,7 +2172,7 @@ ${fullText}`,
                 if (cbFilterPending && r.status !== "pending") return false;
                 if (cbSearch) {
                   const q = cbSearch.toLowerCase();
-                  if (!(r.phone || "").toLowerCase().includes(q) && !(r.customer_name || "").toLowerCase().includes(q)) return false;
+                  if (!String(r.phone || "").toLowerCase().includes(q) && !String(r.customer_name || "").toLowerCase().includes(q)) return false;
                 }
                 return true;
               });
@@ -2057,7 +2180,7 @@ ${fullText}`,
                 return <div style={{ textAlign: "center", color: "#8892a4", fontSize: 11, padding: 16 }}>該当なし</div>;
               }
               return filtered.map(r => {
-                const isMatch = cbSearch && ((r.phone || "").includes(cbSearch) || (r.customer_name || "").includes(cbSearch));
+                const isMatch = cbSearch && (String(r.phone || "").includes(cbSearch) || String(r.customer_name || "").includes(cbSearch));
                 return (
                 <div key={r.id} style={{
                   padding: 10,
@@ -2117,12 +2240,14 @@ ${fullText}`,
         justifyContent: "space-between",
       }}>
         <div style={{ fontSize: 11, color: "#8892a4" }}>
-          {callActive
+          {testCallRunning
+            ? `🧪 テストコール実行中 — テキスト ${transcript.length} 件`
+            : callActive
             ? `通話中${dualMode ? "（2ch分離）" : ""} — テキスト ${transcript.length} 件認識`
             : "待機中 — F2で通話開始"}
         </div>
         <div style={{ display: "flex", gap: 12 }}>
-          {!callActive ? (
+          {!callActive && !testCallRunning ? (
             <>
               <button onClick={startCall} style={{
                 background: "linear-gradient(135deg, #4caf50, #2e7d32)",
@@ -2138,7 +2263,36 @@ ${fullText}`,
               }}>
                 🎙️ 通話開始（音声認識）
               </button>
+              <button onClick={runTestCall} style={{
+                background: "linear-gradient(135deg, #42a5f5, #1565c0)",
+                border: "none",
+                borderRadius: 10,
+                padding: "10px 20px",
+                color: "#fff",
+                fontSize: 12,
+                fontWeight: 700,
+                cursor: "pointer",
+                letterSpacing: "0.05em",
+                boxShadow: "0 4px 20px rgba(66,165,245,0.3)",
+              }}>
+                🧪 テストコール
+              </button>
             </>
+          ) : testCallRunning ? (
+            <button onClick={stopTestCall} style={{
+              background: "linear-gradient(135deg, #ff9800, #e65100)",
+              border: "none",
+              borderRadius: 10,
+              padding: "10px 28px",
+              color: "#fff",
+              fontSize: 13,
+              fontWeight: 700,
+              cursor: "pointer",
+              letterSpacing: "0.05em",
+              boxShadow: "0 4px 20px rgba(255,152,0,0.3)",
+            }}>
+              ⏹ テスト中止
+            </button>
           ) : (
             <button onClick={endCall} style={{
               background: "linear-gradient(135deg, #ef5350, #b71c1c)",

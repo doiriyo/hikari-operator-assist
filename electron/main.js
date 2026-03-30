@@ -1,10 +1,6 @@
-import * as electron from "electron/main";
-const { app, BrowserWindow, ipcMain, systemPreferences } = electron;
-import path from "path";
-import { fileURLToPath } from "url";
+const { app, BrowserWindow, ipcMain, systemPreferences } = require("electron");
+const path = require("path");
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 const isDev = process.env.NODE_ENV === "development";
 
 function createWindow() {

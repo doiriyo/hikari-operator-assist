@@ -124,6 +124,9 @@ function initialSetup() {
   cbHeaderRange.setFontColor("#ffffff");
   cbHeaderRange.setHorizontalAlignment("center");
 
+  // 電話番号列(B列)をテキスト形式に設定（先頭0を保持）
+  cbSheet.getRange("B:B").setNumberFormat("@");
+
   cbSheet.setColumnWidth(1, 160); // id
   cbSheet.setColumnWidth(2, 150); // 電話番号
   cbSheet.setColumnWidth(3, 150); // 顧客名
@@ -259,7 +262,7 @@ function handleAddCallback_(data) {
 
   var row = [
     id,
-    data.phone || "",
+    String(data.phone || ""),
     data.customer_name || "",
     data.assignee || "",
     data.memo || "",
@@ -268,7 +271,12 @@ function handleAddCallback_(data) {
     now,
   ];
 
-  sheet.appendRow(row);
+  // appendRowは自動型変換されるため、setValuesで書き込む
+  var newRow = sheet.getLastRow() + 1;
+  var range = sheet.getRange(newRow, 1, 1, row.length);
+  range.setNumberFormat("@"); // 全セルをテキスト形式に
+  range.setValues([row]);
+
   return jsonResponse_({ success: true, id: id });
 }
 
@@ -283,7 +291,7 @@ function handleUpdateCallback_(data) {
   for (var i = 1; i < rows.length; i++) {
     if (String(rows[i][0]) === targetId) {
       var rowIndex = i + 1; // シートは1始まり
-      if (data.phone !== undefined)         sheet.getRange(rowIndex, 2).setValue(data.phone);
+      if (data.phone !== undefined)         { var cell = sheet.getRange(rowIndex, 2); cell.setNumberFormat("@"); cell.setValue(String(data.phone)); }
       if (data.customer_name !== undefined)  sheet.getRange(rowIndex, 3).setValue(data.customer_name);
       if (data.assignee !== undefined)       sheet.getRange(rowIndex, 4).setValue(data.assignee);
       if (data.memo !== undefined)           sheet.getRange(rowIndex, 5).setValue(data.memo);
@@ -309,7 +317,7 @@ function handleGetCallbacks_(data) {
   for (var i = 1; i < rows.length; i++) {
     var record = {
       id:            String(rows[i][0]),
-      phone:         rows[i][1],
+      phone:         String(rows[i][1]),
       customer_name: rows[i][2],
       assignee:      rows[i][3],
       memo:          rows[i][4],
