@@ -178,7 +178,8 @@ export default function App() {
   // ── アプリ切り替え ──
   const [appView, setAppView] = useState("assist"); // "assist" | "manager"
   // ── 着信顧客情報 ──
-  const [callerInfo, setCallerInfo] = useState(null); // { customer_name, phone, assignee, memo, status }
+  const [callerInfo, setCallerInfo] = useState(null);
+  const [quickPhone, setQuickPhone] = useState("");
   const cbRecordsRef = useRef([]);
   const lastPhoneTimestampRef = useRef(null);
   const operatorIframeRef = useRef(null);
@@ -260,6 +261,35 @@ export default function App() {
     return () => clearInterval(iv);
   }, [isLoggedIn]);
 
+  // ── 着信番号照合 ──
+  const lookupPhone = useCallback((phoneInput) => {
+    const phone = phoneInput.replace(/[-\s]/g, "");
+    if (!phone) return;
+    setAppView("assist");
+    if (!manualFieldsRef.current.has("callback_number")) {
+      setEditableSummary(prev => ({ ...prev, callback_number: phone }));
+    }
+    const matches = cbRecordsRef.current.filter(r =>
+      String(r.phone || "").replace(/[-\s]/g, "") === phone &&
+      !(r.memo || "").startsWith("【ステータス変更】")
+    );
+    if (matches.length > 0) {
+      const sorted = [...matches].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
+      const latest = sorted[0];
+      const pendingMemos = matches.filter(r => r.status === "pending");
+      setCallerInfo({
+        customer_name: latest.customer_name,
+        phone: String(latest.phone),
+        assignee: latest.assignee,
+        status: pendingMemos.length > 0 ? "pending" : "done",
+        pendingCount: pendingMemos.length,
+        entries: sorted.slice(0, 5),
+      });
+    } else {
+      setCallerInfo(null);
+    }
+  }, []);
+
   // ── phone-watcher 連携: ポーリング（未起動時は頻度を下げる） ──
   useEffect(() => {
     if (!isLoggedIn) return;
@@ -272,33 +302,8 @@ export default function App() {
         interval = 3000;
         if (data.phone && data.timestamp && data.timestamp !== lastPhoneTimestampRef.current) {
           lastPhoneTimestampRef.current = data.timestamp;
-          setAppView("assist");
-          if (!manualFieldsRef.current.has("callback_number")) {
-            setEditableSummary(prev => ({ ...prev, callback_number: data.phone }));
-          }
+          lookupPhone(data.phone);
           fetch("http://localhost:3456/clear", { method: "POST" }).catch(() => {});
-
-          // コールバックデータから着信番号を照合
-          const phone = data.phone.replace(/[-\s]/g, "");
-          const matches = cbRecordsRef.current.filter(r =>
-            String(r.phone || "").replace(/[-\s]/g, "") === phone &&
-            !(r.memo || "").startsWith("【ステータス変更】")
-          );
-          if (matches.length > 0) {
-            // 最新のレコードから顧客情報を取得
-            const latest = matches.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))[0];
-            const pendingMemos = matches.filter(r => r.status === "pending");
-            setCallerInfo({
-              customer_name: latest.customer_name,
-              phone: String(latest.phone),
-              assignee: latest.assignee,
-              status: pendingMemos.length > 0 ? "pending" : "done",
-              pendingCount: pendingMemos.length,
-              entries: matches.slice(0, 5), // 直近5件
-            });
-          } else {
-            setCallerInfo(null);
-          }
         }
       } catch {
         interval = 30000;
@@ -1424,6 +1429,48 @@ ${fullText}`,
               background: appView === "manager" ? "rgba(92,107,192,0.2)" : "transparent",
               color: appView === "manager" ? "#5c6bc0" : "#9a9da4",
             }}>電話応対マネージャー</button>
+          </div>
+          {/* Quick Phone Lookup */}
+          <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+            <input
+              value={quickPhone}
+              onChange={e => setQuickPhone(e.target.value)}
+              onKeyDown={e => {
+                if (e.key === "Enter" && quickPhone.trim()) {
+                  lookupPhone(quickPhone.trim());
+                  setQuickPhone("");
+                }
+              }}
+              placeholder="着信番号を入力"
+              style={{
+                width: 140,
+                padding: "5px 10px",
+                background: "rgba(255,255,255,0.06)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: 6,
+                color: "#e0e2e6",
+                fontSize: 12,
+                outline: "none",
+              }}
+            />
+            <button
+              onClick={() => {
+                if (quickPhone.trim()) {
+                  lookupPhone(quickPhone.trim());
+                  setQuickPhone("");
+                }
+              }}
+              style={{
+                padding: "5px 10px",
+                background: "rgba(92,107,192,0.2)",
+                border: "none",
+                borderRadius: 6,
+                color: "#5c6bc0",
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: "pointer",
+              }}
+            >照合</button>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
