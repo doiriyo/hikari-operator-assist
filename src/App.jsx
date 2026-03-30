@@ -1422,7 +1422,7 @@ ${fullText}`,
       {/* Manager View — 常時保持、display切替で瞬時表示 */}
       <div style={{ flex: 1, overflow: "hidden", display: appView === "manager" ? "block" : "none" }}>
         <iframe
-          src="https://asotwc.org/call-m/"
+          src={`https://asotwc.org/call-m/?operator=${encodeURIComponent(operatorName)}`}
           style={{ width: "100%", height: "100%", border: "none", background: "#2a2d35" }}
           title="TWC電話応対マネージャー"
         />
