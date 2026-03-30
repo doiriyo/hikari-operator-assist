@@ -177,6 +177,9 @@ export default function App() {
   const [triggerDeviceId, setTriggerDeviceId] = useState(() => loadDeviceSettings().triggerDeviceId ?? "");
   // ── アプリ切り替え ──
   const [appView, setAppView] = useState("assist"); // "assist" | "manager"
+  // ── 着信顧客情報 ──
+  const [callerInfo, setCallerInfo] = useState(null); // { customer_name, phone, assignee, memo, status }
+  const cbRecordsRef = useRef([]);
   const lastPhoneTimestampRef = useRef(null);
   const operatorIframeRef = useRef(null);
   const customerIframeRef = useRef(null);
@@ -238,16 +241,35 @@ export default function App() {
     saveDeviceSettings({ operatorDeviceId, customerDeviceId, dualMode, triggerEnabled, triggerDeviceId });
   }, [operatorDeviceId, customerDeviceId, dualMode, triggerEnabled, triggerDeviceId]);
 
+  // ── コールバックデータ定期取得（着信時の顧客照合用） ──
+  useEffect(() => {
+    if (!isLoggedIn || !GAS_WEBHOOK_URL) return;
+    const loadCbRecords = async () => {
+      try {
+        const res = await fetch(GAS_WEBHOOK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "text/plain" },
+          body: JSON.stringify({ action: "get_callbacks", api_key: GAS_API_KEY }),
+        });
+        const data = await res.json();
+        cbRecordsRef.current = data.records || [];
+      } catch { /* 静かに無視 */ }
+    };
+    loadCbRecords();
+    const iv = setInterval(loadCbRecords, 30000);
+    return () => clearInterval(iv);
+  }, [isLoggedIn]);
+
   // ── phone-watcher 連携: ポーリング（未起動時は頻度を下げる） ──
   useEffect(() => {
     if (!isLoggedIn) return;
     let timerId = null;
-    let interval = 3000; // 初期: 3秒
+    let interval = 3000;
     const poll = async () => {
       try {
         const res = await fetch("http://localhost:3456/latest-call");
         const data = await res.json();
-        interval = 3000; // 接続成功 → 通常頻度に戻す
+        interval = 3000;
         if (data.phone && data.timestamp && data.timestamp !== lastPhoneTimestampRef.current) {
           lastPhoneTimestampRef.current = data.timestamp;
           setAppView("assist");
@@ -255,9 +277,31 @@ export default function App() {
             setEditableSummary(prev => ({ ...prev, callback_number: data.phone }));
           }
           fetch("http://localhost:3456/clear", { method: "POST" }).catch(() => {});
+
+          // コールバックデータから着信番号を照合
+          const phone = data.phone.replace(/[-\s]/g, "");
+          const matches = cbRecordsRef.current.filter(r =>
+            String(r.phone || "").replace(/[-\s]/g, "") === phone &&
+            !(r.memo || "").startsWith("【ステータス変更】")
+          );
+          if (matches.length > 0) {
+            // 最新のレコードから顧客情報を取得
+            const latest = matches.sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))[0];
+            const pendingMemos = matches.filter(r => r.status === "pending");
+            setCallerInfo({
+              customer_name: latest.customer_name,
+              phone: String(latest.phone),
+              assignee: latest.assignee,
+              status: pendingMemos.length > 0 ? "pending" : "done",
+              pendingCount: pendingMemos.length,
+              entries: matches.slice(0, 5), // 直近5件
+            });
+          } else {
+            setCallerInfo(null);
+          }
         }
       } catch {
-        interval = 30000; // 接続失敗 → 30秒に減速
+        interval = 30000;
       }
       timerId = setTimeout(poll, interval);
     };
@@ -1723,7 +1767,65 @@ ${fullText}`,
           </div>
 
           <div style={{ flex: 1, overflowY: "auto", padding: 20 }}>
-            {kbResults.length === 0 && !aiResponse ? (
+            {/* 着信顧客情報カード */}
+            {callerInfo && (
+              <div style={{
+                marginBottom: 16,
+                padding: 14,
+                background: callerInfo.status === "pending" ? "rgba(239,83,80,0.08)" : "rgba(76,175,80,0.08)",
+                border: callerInfo.status === "pending" ? "1px solid rgba(239,83,80,0.3)" : "1px solid rgba(76,175,80,0.3)",
+                borderLeft: callerInfo.status === "pending" ? "4px solid #ef5350" : "4px solid #4caf50",
+                borderRadius: 10,
+                animation: "fadeSlideIn 0.3s ease",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{ fontSize: 18 }}>📞</span>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: "#e0e2e6" }}>
+                        {callerInfo.customer_name}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#64b5f6" }}>{callerInfo.phone}</div>
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <span style={{
+                      fontSize: 10, padding: "2px 8px", borderRadius: 8, fontWeight: 600,
+                      background: callerInfo.status === "pending" ? "rgba(239,83,80,0.15)" : "rgba(76,175,80,0.15)",
+                      color: callerInfo.status === "pending" ? "#ef5350" : "#4caf50",
+                    }}>{callerInfo.status === "pending" ? `未対応 ${callerInfo.pendingCount}件` : "対応済"}</span>
+                    <button onClick={() => setCallerInfo(null)} style={{
+                      background: "none", border: "none", color: "#9a9da4", fontSize: 14, cursor: "pointer", padding: "2px 4px",
+                    }}>✕</button>
+                  </div>
+                </div>
+                {callerInfo.assignee && (
+                  <div style={{ fontSize: 11, color: "#9a9da4", marginBottom: 6 }}>
+                    担当: <span style={{ color: "#e0e2e6", fontWeight: 600 }}>{callerInfo.assignee}</span>
+                  </div>
+                )}
+                <div style={{
+                  fontSize: 11, color: "#9a9da4", marginBottom: 4, fontWeight: 600, letterSpacing: "0.05em",
+                }}>直近の対応履歴</div>
+                {callerInfo.entries.map((entry, i) => (
+                  <div key={i} style={{
+                    padding: "6px 10px",
+                    marginBottom: 4,
+                    background: "rgba(255,255,255,0.04)",
+                    borderRadius: 6,
+                    fontSize: 11,
+                    lineHeight: 1.6,
+                  }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", color: "#9a9da4", fontSize: 10, marginBottom: 2 }}>
+                      <span>{entry.assignee}</span>
+                      <span>{(entry.created_at || "").replace("T", " ").slice(0, 16)}</span>
+                    </div>
+                    <div style={{ color: "#b0b3ba", whiteSpace: "pre-wrap" }}>{entry.memo}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+            {kbResults.length === 0 && !aiResponse && !callerInfo ? (
               <div style={{
                 height: "100%",
                 display: "flex",
