@@ -626,7 +626,7 @@ ${fullText}`,
 
     window.addEventListener("message", handleWorkerMessage);
     return () => window.removeEventListener("message", handleWorkerMessage);
-  }, [scheduleDifyCall]);
+  }, []);
 
   // ── シングルモード用: 従来のSpeechRecognition（iframeなし） ──
   const startSpeechRecognition = () => {
