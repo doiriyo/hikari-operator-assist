@@ -137,7 +137,6 @@ export default function App() {
   const [aiResponse, setAiResponse] = useState("");
   const [aiLoading, setAiLoading] = useState(false);
   const [pinnedAiResponse, setPinnedAiResponse] = useState("");
-  const [aiEnabled, setAiEnabled] = useState(true);
   const [isListening, setIsListening] = useState(false);
   const [callActive, setCallActive] = useState(false);
   const [elapsed, setElapsed] = useState(0);
@@ -194,7 +193,6 @@ export default function App() {
   const conversationIdRef = useRef("");
   const lastSentRef = useRef("");
   const aiPinnedRef = useRef(false);
-  const aiEnabledRef = useRef(true);
   const recognitionRef = useRef(null);
   const restartAttemptsRef = useRef(0);
   const noSpeechCountRef = useRef(0);
@@ -535,24 +533,18 @@ ${fullText}`,
     }
   }, []);
 
-  const scheduleDifyCall = useCallback((lines, interim = "") => {
-    if (!aiEnabledRef.current || testCallRunningRef.current) return;
-    clearTimeout(difyTimerRef.current);
+  // ── AIアシスト手動トリガー ──
+  const triggerDifyAssist = useCallback(() => {
+    const lines = transcriptLinesRef.current;
+    if (!lines || lines.length === 0) return;
     const fullText = lines.map(l => {
       const label = l.speaker === "operator" ? "[OP]" : l.speaker === "customer" ? "[CU]" : "";
       return label ? `${label} ${l.text}` : l.text;
-    }).join("\n") + (interim ? "\n" + interim : "");
-
-    const isFinal = !interim;
-    const delay = isFinal ? 0 : 200;
-
-    difyTimerRef.current = setTimeout(() => {
-      // 進行中のリクエストをキャンセルして新しいリクエストを開始
-      difyAbortRef.current?.abort();
-      const controller = new AbortController();
-      difyAbortRef.current = controller;
-      callDifyAPI(fullText, controller.signal);
-    }, delay);
+    }).join("\n");
+    difyAbortRef.current?.abort();
+    const controller = new AbortController();
+    difyAbortRef.current = controller;
+    callDifyAPI(fullText, controller.signal);
   }, [callDifyAPI]);
 
   const addLine = (text, speaker = "customer") => {
@@ -575,7 +567,6 @@ ${fullText}`,
         setAnimateResult(false);
         setTimeout(() => { setKbResults(found); setAnimateResult(true); }, 50);
       }
-      scheduleDifyCall(lines);
       return lines;
     });
   };
@@ -619,7 +610,6 @@ ${fullText}`,
               setAnimateResult(false);
               setTimeout(() => { setKbResults(found); setAnimateResult(true); }, 50);
             }
-            scheduleDifyCall(transcriptLinesRef.current, data.text);
           }
           break;
         case "error":
@@ -690,7 +680,6 @@ ${fullText}`,
             setAnimateResult(false);
             setTimeout(() => { setKbResults(found); setAnimateResult(true); }, 50);
           }
-          scheduleDifyCall(transcriptLinesRef.current, interim);
         }
       }
     };
@@ -901,7 +890,6 @@ ${fullText}`,
         const result = await window.electronAPI.transcribe(resampled.buffer);
         if (result?.text?.trim()) {
           addLine(normalizeAddress(result.text.trim()), speaker);
-          scheduleDifyCall(transcriptLinesRef.current, "");
         }
         if (result?.error) console.warn(`[whisper:${speaker}] エラー:`, result.error);
       } catch (err) {
@@ -1784,37 +1772,11 @@ ${fullText}`,
                   {r.category}
                 </span>
               ))}
-              {aiLoading && aiEnabled && (
+              {aiLoading && (
                 <span style={{ fontSize: 10, color: "#64b5f6", animation: "blink 1s infinite" }}>
                   AI分析中...
                 </span>
               )}
-              <button
-                onClick={() => {
-                  const next = !aiEnabled;
-                  setAiEnabled(next);
-                  aiEnabledRef.current = next;
-                  if (!next) {
-                    // 停止時: 進行中リクエストをキャンセル
-                    clearTimeout(difyTimerRef.current);
-                    difyAbortRef.current?.abort();
-                    setAiLoading(false);
-                  }
-                }}
-                title={aiEnabled ? "AI回答を停止" : "AI回答を再開"}
-                style={{
-                  background: aiEnabled ? "rgba(239,83,80,0.1)" : "rgba(76,175,80,0.1)",
-                  border: aiEnabled ? "1px solid rgba(239,83,80,0.3)" : "1px solid rgba(76,175,80,0.3)",
-                  borderRadius: 6,
-                  padding: "3px 10px",
-                  cursor: "pointer",
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: aiEnabled ? "#ef5350" : "#4caf50",
-                }}
-              >
-                {aiEnabled ? "⏹ 停止" : "▶ 再開"}
-              </button>
             </div>
           </div>
 
@@ -1946,6 +1908,30 @@ ${fullText}`,
                   </div>
                 )}
 
+                {/* AIアシスト手動トリガーボタン */}
+                {!aiResponse && !aiLoading && !pinnedAiResponse && transcript.length > 0 && (
+                  <div style={{
+                    display: "flex",
+                    justifyContent: "center",
+                    padding: "16px 0",
+                  }}>
+                    <button onClick={triggerDifyAssist} style={{
+                      padding: "12px 28px",
+                      background: "linear-gradient(135deg, #5c6bc0, #3f51b5)",
+                      border: "none",
+                      borderRadius: 10,
+                      color: "#fff",
+                      fontSize: 13,
+                      fontWeight: 700,
+                      cursor: "pointer",
+                      letterSpacing: "0.05em",
+                      boxShadow: "0 4px 16px rgba(92,107,192,0.3)",
+                    }}>
+                      🤖 AIアシストを開始
+                    </button>
+                  </div>
+                )}
+
                 {/* AI Response from Dify */}
                 {(aiResponse || aiLoading || pinnedAiResponse) && (
                   <div style={{
@@ -2056,6 +2042,21 @@ ${fullText}`,
                             </div>
                           </div>
                         )}
+                      </div>
+                    )}
+                    {/* 再度質問ボタン */}
+                    {(aiResponse || pinnedAiResponse) && !aiLoading && transcript.length > 0 && (
+                      <div style={{ marginTop: 12, textAlign: "center" }}>
+                        <button onClick={triggerDifyAssist} style={{
+                          padding: "6px 18px",
+                          background: "rgba(92,107,192,0.15)",
+                          border: "1px solid rgba(92,107,192,0.3)",
+                          borderRadius: 6,
+                          color: "#5c6bc0",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}>🔄 最新の通話内容で再分析</button>
                       </div>
                     )}
                   </div>
