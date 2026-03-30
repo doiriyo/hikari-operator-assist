@@ -1321,13 +1321,14 @@ ${fullText}`,
 
   return (
     <div style={{
-      minHeight: "100vh",
+      height: "100vh",
       background: "#0a0f1e",
       fontFamily: "'Noto Sans JP', 'Hiragino Sans', sans-serif",
       color: "#e8eaf0",
       display: "flex",
       flexDirection: "column",
-      paddingBottom: 60,
+      paddingBottom: appView === "assist" ? 60 : 0,
+      overflow: "hidden",
     }}>
       {/* Header */}
       <header style={{
