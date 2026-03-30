@@ -175,8 +175,8 @@ export default function App() {
   const [correctionTo, setCorrectionTo] = useState("");
   const [triggerEnabled, setTriggerEnabled] = useState(() => loadDeviceSettings().triggerEnabled ?? false);
   const [triggerDeviceId, setTriggerDeviceId] = useState(() => loadDeviceSettings().triggerDeviceId ?? "");
-  // ── 右パネルタブ ──
-  const [rightTab, setRightTab] = useState("record"); // "record" | "manager"
+  // ── アプリ切り替え ──
+  const [appView, setAppView] = useState("assist"); // "assist" | "manager"
   const lastPhoneTimestampRef = useRef(null);
   const operatorIframeRef = useRef(null);
   const customerIframeRef = useRef(null);
@@ -250,7 +250,7 @@ export default function App() {
         interval = 3000; // 接続成功 → 通常頻度に戻す
         if (data.phone && data.timestamp && data.timestamp !== lastPhoneTimestampRef.current) {
           lastPhoneTimestampRef.current = data.timestamp;
-          setRightTab("record");
+          setAppView("assist");
           if (!manualFieldsRef.current.has("callback_number")) {
             setEditableSummary(prev => ({ ...prev, callback_number: data.phone }));
           }
@@ -1134,7 +1134,7 @@ ${fullText}`,
       // 初期化（残留タイマー・リクエストをキャンセル）
       clearTimeout(difyTimerRef.current);
       difyAbortRef.current?.abort();
-      setRightTab("record");
+      setAppView("assist");
       setTranscript([]);
       transcriptLinesRef.current = [];
       setKbResults([]);
@@ -1199,10 +1199,10 @@ ${fullText}`,
         setSaveStatus("");
         setShowSummaryModal(true);
 
-        // 3秒後に電話応対マネージャータブに切り替え
+        // 3秒後に電話応対マネージャーに切り替え
         await delay(3000);
         if (!testCallAbortRef.current) {
-          setRightTab("manager");
+          setAppView("manager");
         }
       } else {
         setCallActive(false);
@@ -1340,20 +1340,45 @@ ${fullText}`,
         justifyContent: "space-between",
         flexShrink: 0,
       }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div style={{
-            width: 32, height: 32, borderRadius: 8,
-            background: "linear-gradient(135deg, #ffb74d, #ff8f00)",
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 16,
-          }}>📞</div>
-          <div>
-            <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", color: "#ffb74d" }}>
-              ASO NET — オペレーターアシスト
+        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 8,
+              background: "linear-gradient(135deg, #ffb74d, #ff8f00)",
+              display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 16,
+            }}>📞</div>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", color: "#ffb74d" }}>
+                ASO NET
+              </div>
+              <div style={{ fontSize: 10, color: "#8892a4", letterSpacing: "0.05em" }}>
+                NETWORK SUPPORT SYSTEM
+              </div>
             </div>
-            <div style={{ fontSize: 10, color: "#8892a4", letterSpacing: "0.05em" }}>
-              NETWORK SUPPORT AI ASSISTANT
-            </div>
+          </div>
+          {/* App Switcher */}
+          <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: 3 }}>
+            <button onClick={() => setAppView("assist")} style={{
+              padding: "6px 14px",
+              borderRadius: 6,
+              border: "none",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+              background: appView === "assist" ? "rgba(255,183,77,0.2)" : "transparent",
+              color: appView === "assist" ? "#ffb74d" : "#8892a4",
+            }}>オペレーターアシスト</button>
+            <button onClick={() => setAppView("manager")} style={{
+              padding: "6px 14px",
+              borderRadius: 6,
+              border: "none",
+              fontSize: 11,
+              fontWeight: 600,
+              cursor: "pointer",
+              background: appView === "manager" ? "rgba(255,183,77,0.2)" : "transparent",
+              color: appView === "manager" ? "#ffb74d" : "#8892a4",
+            }}>電話応対マネージャー</button>
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
@@ -1393,7 +1418,19 @@ ${fullText}`,
         </div>
       </header>
 
-      {/* Main */}
+      {/* Manager View */}
+      {appView === "manager" && (
+        <div style={{ flex: 1, overflow: "hidden" }}>
+          <iframe
+            src="https://asotwc.org/call-m/"
+            style={{ width: "100%", height: "100%", border: "none", background: "#f0f2f5" }}
+            title="TWC電話応対マネージャー"
+          />
+        </div>
+      )}
+
+      {/* Assist View */}
+      {appView === "assist" && (<>
       <div style={{ flex: 1, display: "flex", overflow: "hidden", gap: 0 }}>
 
         {/* Left: Transcript Panel */}
@@ -1847,7 +1884,7 @@ ${fullText}`,
           </div>
         </div>
 
-        {/* Right: Record Form / Callback Panel */}
+        {/* Right: Record Form Panel */}
         <div style={{
           width: "25%",
           minWidth: 260,
@@ -1855,34 +1892,14 @@ ${fullText}`,
           flexDirection: "column",
           overflow: "hidden",
         }}>
-          {/* Tab Header */}
           <div style={{
-            display: "flex",
+            padding: "14px 20px 12px",
             borderBottom: "1px solid rgba(255,255,255,0.06)",
           }}>
-            {[
-              { id: "record", label: "通話記録" },
-              { id: "manager", label: "電話応対" },
-            ].map(tab => (
-              <button key={tab.id} onClick={() => setRightTab(tab.id)} style={{
-                flex: 1,
-                padding: "12px 0",
-                background: rightTab === tab.id ? "rgba(255,183,77,0.08)" : "transparent",
-                border: "none",
-                borderBottom: rightTab === tab.id ? "2px solid #ffb74d" : "2px solid transparent",
-                color: rightTab === tab.id ? "#ffb74d" : "#8892a4",
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "0.08em",
-                cursor: "pointer",
-              }}>
-                {tab.label}
-              </button>
-            ))}
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "#8892a4" }}>
+              ▌ 通話記録
+            </div>
           </div>
-
-          {/* Tab: 通話記録 */}
-          {rightTab === "record" && (
           <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px" }}>
             {[
               { key: "caller_name", label: "名前", icon: "👤" },
@@ -1968,24 +1985,6 @@ ${fullText}`,
               </div>
             ))}
           </div>
-          )}
-
-          {/* Tab: 電話応対マネージャー */}
-          {rightTab === "manager" && (
-          <div style={{ flex: 1, overflow: "hidden" }}>
-            <iframe
-              src="https://asotwc.org/call-m/"
-              style={{
-                width: "100%",
-                height: "100%",
-                border: "none",
-                background: "#f0f2f5",
-              }}
-              title="TWC電話応対マネージャー"
-            />
-          </div>
-          )}
-
         </div>
       </div>
 
@@ -2771,6 +2770,7 @@ ${fullText}`,
           </div>
         </div>
       )}
+      </>)}
 
       <style>{`
         @keyframes pulse {
