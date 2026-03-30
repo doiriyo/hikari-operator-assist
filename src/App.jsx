@@ -1294,10 +1294,10 @@ ${fullText}`,
             fontSize: 28, margin: "0 auto 20px",
           }}>📞</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#5c6bc0", letterSpacing: "0.08em", marginBottom: 6 }}>
-            TWC
+            阿蘇テレワークセンター
           </div>
           <div style={{ fontSize: 11, color: "#9a9da4", letterSpacing: "0.05em", marginBottom: 32 }}>
-            OPERATOR ASSIST SYSTEM
+            TELEPHONE SUPPORT
           </div>
 
           <div style={{ textAlign: "left", marginBottom: 8 }}>
@@ -1388,7 +1388,7 @@ ${fullText}`,
             }}>📞</div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", color: "#5c6bc0" }}>
-                TWC
+                阿蘇テレワークセンター
               </div>
               <div style={{ fontSize: 10, color: "#9a9da4", letterSpacing: "0.05em" }}>
                 TELEPHONE SUPPORT
