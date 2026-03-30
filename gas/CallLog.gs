@@ -355,7 +355,7 @@ function handleUpdateCallback_(data) {
         var logMemo = "【ステータス変更】" + statusLabel + (data.operator ? "（" + data.operator + "）" : "");
         var logId = String(Date.now());
         var now = new Date().toISOString();
-        var logRow = [logId, phone, customerName, data.operator || "", logMemo, now, data.status, now];
+        var logRow = [logId, phone, customerName, data.operator || "", logMemo, now, "done", now];
         var logNewRow = sheet.getLastRow() + 1;
         var logRange = sheet.getRange(logNewRow, 1, 1, logRow.length);
         logRange.setNumberFormat("@");
