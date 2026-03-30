@@ -56,6 +56,8 @@ var CALLBACK_HEADERS = [
   "発信日時",
   "ステータス",
   "更新日時",
+  "契約者名",
+  "契約住所",
 ];
 
 /**
@@ -137,6 +139,8 @@ function initialSetup() {
   cbSheet.setColumnWidth(6, 180); // 発信日時
   cbSheet.setColumnWidth(7, 100); // ステータス
   cbSheet.setColumnWidth(8, 180); // 更新日時
+  cbSheet.setColumnWidth(9, 150); // 契約者名
+  cbSheet.setColumnWidth(10, 250); // 契約住所
 
   cbSheet.setFrozenRows(1);
 
@@ -240,6 +244,8 @@ function doPost(e) {
       timestamp,
       cbStatus,
       timestamp,
+      data.contract_name || "",
+      data.contract_address || "",
     ];
     var cbNewRow = cbSheet.getLastRow() + 1;
     var cbRange = cbSheet.getRange(cbNewRow, 1, 1, cbRow.length);
@@ -306,6 +312,8 @@ function handleAddCallback_(data) {
     now,
     "pending",
     now,
+    data.contract_name || "",
+    data.contract_address || "",
   ];
 
   // appendRowは自動型変換されるため、setValuesで書き込む
@@ -334,6 +342,8 @@ function handleUpdateCallback_(data) {
       if (data.assignee !== undefined)       sheet.getRange(rowIndex, 4).setValue(data.assignee);
       if (data.memo !== undefined)           sheet.getRange(rowIndex, 5).setValue(data.memo);
       if (data.status !== undefined)         sheet.getRange(rowIndex, 7).setValue(data.status);
+      if (data.contract_name !== undefined)  sheet.getRange(rowIndex, 9).setValue(data.contract_name);
+      if (data.contract_address !== undefined) sheet.getRange(rowIndex, 10).setValue(data.contract_address);
       // 更新日時を記録
       sheet.getRange(rowIndex, 8).setValue(new Date().toISOString());
 
@@ -378,6 +388,8 @@ function handleGetCallbacks_(data) {
       created_at:    rows[i][5],
       status:        rows[i][6],
       updated_at:    rows[i][7],
+      contract_name: rows[i][8] || "",
+      contract_address: rows[i][9] || "",
     };
     if (statusFilter && record.status !== statusFilter) continue;
     records.push(record);

@@ -277,10 +277,15 @@ export default function App() {
       const sorted = [...matches].sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""));
       const latest = sorted[0];
       const pendingMemos = matches.filter(r => r.status === "pending");
+      // 契約者情報は履歴から最新の非空値を取得
+      const contractName = sorted.find(r => r.contract_name)?.contract_name || "";
+      const contractAddress = sorted.find(r => r.contract_address)?.contract_address || "";
       setCallerInfo({
         customer_name: latest.customer_name,
         phone: String(latest.phone),
         assignee: latest.assignee,
+        contract_name: contractName,
+        contract_address: contractAddress,
         status: pendingMemos.length > 0 ? "pending" : "done",
         pendingCount: pendingMemos.length,
         entries: sorted.slice(0, 5),
@@ -1851,23 +1856,46 @@ ${fullText}`,
                     担当: <span style={{ color: "#e0e2e6", fontWeight: 600 }}>{callerInfo.assignee}</span>
                   </div>
                 )}
+                {(callerInfo.contract_name || callerInfo.contract_address) && (
+                  <div style={{ fontSize: 11, color: "#9a9da4", marginBottom: 6, display: "flex", gap: 12 }}>
+                    {callerInfo.contract_name && <span>契約者: <span style={{ color: "#e0e2e6" }}>{callerInfo.contract_name}</span></span>}
+                    {callerInfo.contract_address && <span>住所: <span style={{ color: "#e0e2e6" }}>{callerInfo.contract_address}</span></span>}
+                  </div>
+                )}
                 <div style={{
                   fontSize: 11, color: "#9a9da4", marginBottom: 4, fontWeight: 600, letterSpacing: "0.05em",
-                }}>直近の対応履歴</div>
+                }}>直近の対応履歴（クリックで通話記録に反映）</div>
                 {callerInfo.entries.map((entry, i) => (
-                  <div key={i} style={{
+                  <div key={i} onClick={() => {
+                    setEditableSummary(prev => ({
+                      ...prev,
+                      caller_name: prev.caller_name || entry.customer_name || "",
+                      callback_number: prev.callback_number || String(entry.phone || ""),
+                      contract_name: prev.contract_name || entry.contract_name || "",
+                      contract_address: prev.contract_address || entry.contract_address || "",
+                    }));
+                  }} style={{
                     padding: "6px 10px",
                     marginBottom: 4,
                     background: "rgba(255,255,255,0.04)",
                     borderRadius: 6,
                     fontSize: 11,
                     lineHeight: 1.6,
-                  }}>
+                    cursor: "pointer",
+                    transition: "background 0.15s",
+                  }} onMouseEnter={e => e.currentTarget.style.background = "rgba(92,107,192,0.1)"}
+                     onMouseLeave={e => e.currentTarget.style.background = "rgba(255,255,255,0.04)"}>
                     <div style={{ display: "flex", justifyContent: "space-between", color: "#9a9da4", fontSize: 10, marginBottom: 2 }}>
                       <span>{entry.assignee}</span>
                       <span>{(entry.created_at || "").replace("T", " ").slice(0, 16)}</span>
                     </div>
                     <div style={{ color: "#b0b3ba", whiteSpace: "pre-wrap" }}>{entry.memo}</div>
+                    {(entry.contract_name || entry.contract_address) && (
+                      <div style={{ fontSize: 10, color: "#9a9da4", marginTop: 2 }}>
+                        {entry.contract_name && <span>📋 {entry.contract_name} </span>}
+                        {entry.contract_address && <span>📍 {entry.contract_address}</span>}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
