@@ -2215,20 +2215,6 @@ ${fullText}`,
               }}>
                 🎙️ 通話開始（音声認識）
               </button>
-              <button onClick={runTestCall} style={{
-                background: "linear-gradient(135deg, #42a5f5, #1565c0)",
-                border: "none",
-                borderRadius: 10,
-                padding: "10px 20px",
-                color: "#fff",
-                fontSize: 12,
-                fontWeight: 700,
-                cursor: "pointer",
-                letterSpacing: "0.05em",
-                boxShadow: "0 4px 20px rgba(66,165,245,0.3)",
-              }}>
-                🧪 テストコール
-              </button>
             </>
           ) : testCallRunning ? (
             <button onClick={stopTestCall} style={{
@@ -2316,6 +2302,31 @@ ${fullText}`,
           }}>
             🔧 デバッグ
           </button>
+          {!callActive && !testCallRunning ? (
+            <button onClick={runTestCall} style={{
+              background: "#3a3f48",
+              border: "1px solid rgba(255,255,255,0.1)",
+              borderRadius: 10,
+              padding: "10px 14px",
+              color: "#9a9da4",
+              fontSize: 12,
+              cursor: "pointer",
+            }}>
+              🧪 テスト
+            </button>
+          ) : testCallRunning ? (
+            <button onClick={stopTestCall} style={{
+              background: "rgba(255,152,0,0.1)",
+              border: "1px solid rgba(255,152,0,0.3)",
+              borderRadius: 10,
+              padding: "10px 14px",
+              color: "#ff9800",
+              fontSize: 12,
+              cursor: "pointer",
+            }}>
+              ⏹ 停止
+            </button>
+          ) : null}
         </div>
       </div>
 
