@@ -226,6 +226,26 @@ function doPost(e) {
       sheet.getRange(lastRow, 4).setFontWeight("bold");
     }
 
+    // --- コールバック管理シートにも自動追加 ---
+    var cbSheet = getCallbackSheet_();
+    var cbId = String(Date.now());
+    var cbStatus = summary.indexOf("要折返") === 0 ? "pending" : "done";
+    var cbMemo = (data.category ? data.category + "：" : "") + summary;
+    var cbRow = [
+      cbId,
+      String(data.callback_number || ""),
+      callerName,
+      data.callback_assignee || data.operator || "",
+      cbMemo,
+      timestamp,
+      cbStatus,
+      timestamp,
+    ];
+    var cbNewRow = cbSheet.getLastRow() + 1;
+    var cbRange = cbSheet.getRange(cbNewRow, 1, 1, cbRow.length);
+    cbRange.setNumberFormat("@");
+    cbRange.setValues([cbRow]);
+
     return ContentService
       .createTextOutput(JSON.stringify({ status: "ok" }))
       .setMimeType(ContentService.MimeType.JSON);
