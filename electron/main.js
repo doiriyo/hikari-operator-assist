@@ -1,10 +1,10 @@
-import { app, BrowserWindow, ipcMain, systemPreferences } from "electron";
+import * as electron from "electron/main";
+const { app, BrowserWindow, ipcMain, systemPreferences } = electron;
 import path from "path";
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
 const isDev = process.env.NODE_ENV === "development";
 
 function createWindow() {
@@ -29,11 +29,9 @@ function createWindow() {
 }
 
 app.whenReady().then(async () => {
-  // macOS: マイク権限をリクエスト
   if (process.platform === "darwin") {
     await systemPreferences.askForMediaAccess("microphone");
   }
-
   createWindow();
 });
 
@@ -45,16 +43,18 @@ app.on("activate", () => {
   if (BrowserWindow.getAllWindows().length === 0) createWindow();
 });
 
-// ── IPC Handlers（whisper.cpp 統合用の基盤） ──
+// ── IPC Handlers ──
 
-ipcMain.handle("whisper:transcribe", async (_event, _audioBuffer) => {
-  return { text: "", segments: [] };
+ipcMain.handle("whisper:transcribe", async (_event, audioBuffer) => {
+  try {
+    const { transcribeBuffer } = await import("./whisper.mjs");
+    const text = await transcribeBuffer(audioBuffer);
+    return { text, error: null };
+  } catch (err) {
+    console.error("[whisper] 文字起こしエラー:", err);
+    return { text: "", error: err.message };
+  }
 });
 
-ipcMain.handle("audio:getDevices", async () => {
-  return [];
-});
-
-ipcMain.handle("app:getVersion", () => {
-  return app.getVersion();
-});
+ipcMain.handle("audio:getDevices", async () => []);
+ipcMain.handle("app:getVersion", () => app.getVersion());

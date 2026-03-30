@@ -8,11 +8,12 @@
     "dev": "vite",
     "dev:electron": "concurrently -k \"cross-env NODE_ENV=development vite\" \"wait-on http://localhost:5173/hikari-oa/ && cross-env NODE_ENV=development electron .\"",
     "build": "vite build",
-    "build:electron": "cross-env BUILD_TARGET=electron vite build && electron-builder",
+    "build:electron": "cross-env BUILD_TARGET=electron vite build && electron-rebuild && electron-builder",
     "preview": "vite preview",
     "lint": "eslint ."
   },
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
@@ -39,6 +40,10 @@
   "build": {
     "appId": "com.hikari.operator-assist",
     "productName": "Hikari Operator Assist",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/onnxruntime-node/**/*"
+    ],
     "directories": {
       "output": "release"
     },
