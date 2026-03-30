@@ -1200,7 +1200,7 @@ ${fullText}`,
       });
 
       const testScript = [
-        { speaker: "operator", text: "お電話ありがとうございます。阿蘇ネットサポートセンターです。" },
+        { speaker: "operator", text: "お電話ありがとうございます。阿蘇テレワークセンターです。" },
         { speaker: "customer", text: "すみません、インターネットが繋がらなくなったんですけど。" },
         { speaker: "operator", text: "ご不便をおかけして申し訳ございません。状況を確認いたします。ONUのランプはどのような状態ですか？" },
         { speaker: "customer", text: "赤いランプが点滅しています。名前は山田太郎です。" },
@@ -1294,7 +1294,7 @@ ${fullText}`,
             fontSize: 28, margin: "0 auto 20px",
           }}>📞</div>
           <div style={{ fontSize: 16, fontWeight: 700, color: "#5c6bc0", letterSpacing: "0.08em", marginBottom: 6 }}>
-            ASO NET
+            TWC
           </div>
           <div style={{ fontSize: 11, color: "#9a9da4", letterSpacing: "0.05em", marginBottom: 32 }}>
             OPERATOR ASSIST SYSTEM
@@ -1388,10 +1388,10 @@ ${fullText}`,
             }}>📞</div>
             <div>
               <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", color: "#5c6bc0" }}>
-                ASO NET
+                TWC
               </div>
               <div style={{ fontSize: 10, color: "#9a9da4", letterSpacing: "0.05em" }}>
-                NETWORK SUPPORT SYSTEM
+                TELEPHONE SUPPORT
               </div>
             </div>
           </div>
