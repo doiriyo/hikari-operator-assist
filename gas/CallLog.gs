@@ -303,14 +303,18 @@ function handleAddCallback_(data) {
   var id = String(Date.now());
   var now = new Date().toISOString();
 
+  var memo = data.memo || "";
+  var isLogEntry = memo.indexOf("【") === 0; // 【全件対応】【対応内容】等はログエントリ
+  var status = isLogEntry ? "done" : (data.status || "pending");
+
   var row = [
     id,
     normalizePhone_(data.phone),
     data.customer_name || "",
     data.assignee || "",
-    data.memo || "",
+    memo,
     now,
-    "pending",
+    status,
     now,
     data.contract_name || "",
     data.contract_address || "",
