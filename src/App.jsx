@@ -1233,38 +1233,38 @@ ${fullText}`,
     return (
       <div style={{
         minHeight: "100vh",
-        background: "#0a0f1e",
+        background: "#f0f2f5",
         fontFamily: "'Noto Sans JP', 'Hiragino Sans', sans-serif",
-        color: "#e8eaf0",
+        color: "#333333",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
       }}>
         <div style={{
-          background: "linear-gradient(135deg, #0d1535, #111d3d)",
-          border: "1px solid rgba(255,183,77,0.2)",
+          background: "#ffffff",
+          border: "1px solid rgba(26,35,126,0.2)",
           borderRadius: 20,
           padding: "48px 40px",
           width: "100%",
           maxWidth: 380,
-          boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.1)",
           textAlign: "center",
         }}>
           <div style={{
             width: 56, height: 56, borderRadius: 14,
-            background: "linear-gradient(135deg, #ffb74d, #ff8f00)",
+            background: "linear-gradient(135deg, #1a237e, #283593)",
             display: "flex", alignItems: "center", justifyContent: "center",
             fontSize: 28, margin: "0 auto 20px",
           }}>📞</div>
-          <div style={{ fontSize: 16, fontWeight: 700, color: "#ffb74d", letterSpacing: "0.08em", marginBottom: 6 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, color: "#1a237e", letterSpacing: "0.08em", marginBottom: 6 }}>
             ASO NET
           </div>
-          <div style={{ fontSize: 11, color: "#8892a4", letterSpacing: "0.05em", marginBottom: 32 }}>
+          <div style={{ fontSize: 11, color: "#888888", letterSpacing: "0.05em", marginBottom: 32 }}>
             OPERATOR ASSIST SYSTEM
           </div>
 
           <div style={{ textAlign: "left", marginBottom: 8 }}>
-            <label style={{ fontSize: 11, color: "#8892a4", letterSpacing: "0.08em" }}>
+            <label style={{ fontSize: 11, color: "#888888", letterSpacing: "0.08em" }}>
               オペレーター名
             </label>
           </div>
@@ -1276,11 +1276,11 @@ ${fullText}`,
             autoFocus
             style={{
               width: "100%",
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.15)",
+              background: "#ffffff",
+              border: "1px solid #e0e0e0",
               borderRadius: 10,
               padding: "12px 16px",
-              color: "#e8eaf0",
+              color: "#333333",
               fontSize: 14,
               outline: "none",
               boxSizing: "border-box",
@@ -1293,12 +1293,12 @@ ${fullText}`,
             style={{
               width: "100%",
               background: loginInput.trim()
-                ? "linear-gradient(135deg, #ffb74d, #ff8f00)"
-                : "rgba(255,255,255,0.08)",
+                ? "linear-gradient(135deg, #1a237e, #283593)"
+                : "#f5f5f5",
               border: "none",
               borderRadius: 10,
               padding: "12px 20px",
-              color: loginInput.trim() ? "#0a0f1e" : "#8892a4",
+              color: loginInput.trim() ? "#ffffff" : "#888888",
               fontSize: 14,
               fontWeight: 700,
               cursor: loginInput.trim() ? "pointer" : "default",
@@ -1308,12 +1308,12 @@ ${fullText}`,
           >
             ログイン
           </button>
-          <div style={{ fontSize: 10, color: "#4a5568", marginTop: 16 }}>
+          <div style={{ fontSize: 10, color: "#999", marginTop: 16 }}>
             ログイン状態は6時間保持されます
           </div>
         </div>
         <style>{`
-          input::placeholder { color: #4a5568; }
+          input::placeholder { color: #999; }
         `}</style>
       </div>
     );
@@ -1322,9 +1322,9 @@ ${fullText}`,
   return (
     <div style={{
       height: "100vh",
-      background: "#0a0f1e",
+      background: "#f0f2f5",
       fontFamily: "'Noto Sans JP', 'Hiragino Sans', sans-serif",
-      color: "#e8eaf0",
+      color: "#333333",
       display: "flex",
       flexDirection: "column",
       paddingBottom: appView === "assist" ? 60 : 0,
@@ -1332,8 +1332,8 @@ ${fullText}`,
     }}>
       {/* Header */}
       <header style={{
-        background: "linear-gradient(90deg, #0d1535 0%, #111d3d 100%)",
-        borderBottom: "1px solid rgba(255,183,77,0.2)",
+        background: "#ffffff",
+        borderBottom: "1px solid #e0e0e0",
         padding: "0 24px",
         height: 56,
         display: "flex",
@@ -1345,21 +1345,21 @@ ${fullText}`,
           <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
             <div style={{
               width: 32, height: 32, borderRadius: 8,
-              background: "linear-gradient(135deg, #ffb74d, #ff8f00)",
+              background: "linear-gradient(135deg, #1a237e, #283593)",
               display: "flex", alignItems: "center", justifyContent: "center",
               fontSize: 16,
             }}>📞</div>
             <div>
-              <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", color: "#ffb74d" }}>
+              <div style={{ fontSize: 13, fontWeight: 700, letterSpacing: "0.08em", color: "#1a237e" }}>
                 ASO NET
               </div>
-              <div style={{ fontSize: 10, color: "#8892a4", letterSpacing: "0.05em" }}>
+              <div style={{ fontSize: 10, color: "#888888", letterSpacing: "0.05em" }}>
                 NETWORK SUPPORT SYSTEM
               </div>
             </div>
           </div>
           {/* App Switcher */}
-          <div style={{ display: "flex", gap: 4, background: "rgba(255,255,255,0.06)", borderRadius: 8, padding: 3 }}>
+          <div style={{ display: "flex", gap: 4, background: "#f5f5f5", borderRadius: 8, padding: 3 }}>
             <button onClick={() => setAppView("assist")} style={{
               padding: "6px 14px",
               borderRadius: 6,
@@ -1367,8 +1367,8 @@ ${fullText}`,
               fontSize: 11,
               fontWeight: 600,
               cursor: "pointer",
-              background: appView === "assist" ? "rgba(255,183,77,0.2)" : "transparent",
-              color: appView === "assist" ? "#ffb74d" : "#8892a4",
+              background: appView === "assist" ? "rgba(26,35,126,0.1)" : "transparent",
+              color: appView === "assist" ? "#1a237e" : "#888888",
             }}>オペレーターアシスト</button>
             <button onClick={() => setAppView("manager")} style={{
               padding: "6px 14px",
@@ -1377,8 +1377,8 @@ ${fullText}`,
               fontSize: 11,
               fontWeight: 600,
               cursor: "pointer",
-              background: appView === "manager" ? "rgba(255,183,77,0.2)" : "transparent",
-              color: appView === "manager" ? "#ffb74d" : "#8892a4",
+              background: appView === "manager" ? "rgba(26,35,126,0.1)" : "transparent",
+              color: appView === "manager" ? "#1a237e" : "#888888",
             }}>電話応対マネージャー</button>
           </div>
         </div>
@@ -1397,21 +1397,21 @@ ${fullText}`,
               </span>
             </div>
           )}
-          <div style={{ fontSize: 11, color: "#8892a4" }}>
+          <div style={{ fontSize: 11, color: "#888888" }}>
             {new Date().toLocaleDateString("ja-JP", { year:"numeric", month:"long", day:"numeric", weekday:"short" })}
           </div>
           <div style={{
             display: "flex", alignItems: "center", gap: 8,
-            borderLeft: "1px solid rgba(255,255,255,0.1)",
+            borderLeft: "1px solid #e0e0e0",
             paddingLeft: 16,
           }}>
-            <span style={{ fontSize: 12, color: "#e8eaf0" }}>{operatorName}</span>
+            <span style={{ fontSize: 12, color: "#333333" }}>{operatorName}</span>
             <button onClick={handleLogout} style={{
-              background: "rgba(255,255,255,0.06)",
-              border: "1px solid rgba(255,255,255,0.1)",
+              background: "#f5f5f5",
+              border: "1px solid #e0e0e0",
               borderRadius: 6,
               padding: "3px 10px",
-              color: "#8892a4",
+              color: "#888888",
               fontSize: 10,
               cursor: "pointer",
             }}>ログアウト</button>
@@ -1438,18 +1438,19 @@ ${fullText}`,
         <div style={{
           width: "25%",
           minWidth: 260,
-          borderRight: "1px solid rgba(255,255,255,0.07)",
+          borderRight: "1px solid #e0e0e0",
           display: "flex",
           flexDirection: "column",
+          background: "#ffffff",
         }}>
           <div style={{
             padding: "14px 20px 12px",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            borderBottom: "1px solid #e0e0e0",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "#8892a4" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "#888888" }}>
               ▌ 通話テキスト
             </div>
             {isListening && (
@@ -1488,12 +1489,12 @@ ${fullText}`,
             <div style={{
               margin: "8px 16px 0",
               padding: "8px 10px",
-              background: "rgba(100,181,246,0.06)",
-              border: "1px solid rgba(100,181,246,0.2)",
+              background: "rgba(25,118,210,0.05)",
+              border: "1px solid rgba(25,118,210,0.15)",
               borderRadius: 8,
               fontSize: 10,
               fontFamily: "monospace",
-              color: "#64b5f6",
+              color: "#1565c0",
               lineHeight: 1.6,
               maxHeight: 160,
               overflowY: "auto",
@@ -1510,7 +1511,7 @@ ${fullText}`,
                     <div style={{
                       flex: 1,
                       height: 8,
-                      background: "rgba(255,255,255,0.1)",
+                      background: "rgba(0,0,0,0.08)",
                       borderRadius: 4,
                       overflow: "hidden",
                       maxWidth: 150,
@@ -1563,25 +1564,25 @@ ${fullText}`,
                   const isOp = line.speaker === "operator";
                   const isCu = line.speaker === "customer";
                   const isMixed = line.speaker === "mixed";
-                  const speakerColor = isOp ? "#64b5f6" : isCu ? "#ffb74d" : "#e8eaf0";
+                  const speakerColor = isOp ? "#1565c0" : isCu ? "#1a237e" : "#333333";
                   const speakerName = isOp ? "オペレーター" : isCu ? "お客様" : "通話音声";
                   return (
                     <div key={line.id} style={{
                       marginBottom: 14,
                       animation: "fadeSlideIn 0.3s ease",
                     }}>
-                      <div style={{ fontSize: 10, color: "#8892a4", marginBottom: 4 }}>
+                      <div style={{ fontSize: 10, color: "#888888", marginBottom: 4 }}>
                         {line.ts} — <span style={{ color: speakerColor }}>{speakerName}</span>
                       </div>
                       <div style={{
-                        background: isOp ? "rgba(100,181,246,0.06)" : isCu ? "rgba(255,183,77,0.06)" : "rgba(255,255,255,0.03)",
-                        border: isOp ? "1px solid rgba(100,181,246,0.15)" : isCu ? "1px solid rgba(255,183,77,0.15)" : "1px solid rgba(255,255,255,0.08)",
+                        background: isOp ? "rgba(25,118,210,0.05)" : isCu ? "rgba(255,152,0,0.05)" : "rgba(0,0,0,0.02)",
+                        border: isOp ? "1px solid rgba(25,118,210,0.15)" : isCu ? "1px solid rgba(255,152,0,0.15)" : "1px solid rgba(0,0,0,0.08)",
                         borderRadius: 10,
                         padding: "10px 14px",
                         fontSize: 14,
                         lineHeight: 1.7,
-                        color: "#e8eaf0",
-                        borderLeft: isMixed ? "none" : isOp ? "3px solid rgba(100,181,246,0.4)" : "3px solid rgba(255,183,77,0.4)",
+                        color: "#333333",
+                        borderLeft: isMixed ? "none" : isOp ? "3px solid rgba(25,118,210,0.4)" : "3px solid rgba(255,152,0,0.4)",
                       }}>
                         {line.text}
                       </div>
@@ -1590,17 +1591,17 @@ ${fullText}`,
                 })}
                 {interimText && (
                   <div style={{ marginBottom: 14 }}>
-                    <div style={{ fontSize: 10, color: "#8892a4", marginBottom: 4 }}>
+                    <div style={{ fontSize: 10, color: "#888888", marginBottom: 4 }}>
                       認識中...
                     </div>
                     <div style={{
-                      background: "rgba(255,183,77,0.03)",
-                      border: "1px dashed rgba(255,183,77,0.2)",
+                      background: "rgba(26,35,126,0.03)",
+                      border: "1px dashed rgba(26,35,126,0.2)",
                       borderRadius: 10,
                       padding: "10px 14px",
                       fontSize: 14,
                       lineHeight: 1.7,
-                      color: "#8892a4",
+                      color: "#888888",
                       fontStyle: "italic",
                     }}>
                       {interimText}
@@ -1614,9 +1615,9 @@ ${fullText}`,
           {/* Manual Input */}
           <div style={{
             padding: "12px 16px",
-            borderTop: "1px solid rgba(255,255,255,0.06)",
+            borderTop: "1px solid #e0e0e0",
           }}>
-            <div style={{ fontSize: 10, color: "#8892a4", marginBottom: 8, letterSpacing: "0.08em" }}>
+            <div style={{ fontSize: 10, color: "#888888", marginBottom: 8, letterSpacing: "0.08em" }}>
               ▌ キーワード手動入力
             </div>
             <div style={{ display: "flex", gap: 8 }}>
@@ -1627,11 +1628,11 @@ ${fullText}`,
                 placeholder="例：速度が遅い、接続できない…"
                 style={{
                   flex: 1,
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "#ffffff",
+                  border: "1px solid #e0e0e0",
                   borderRadius: 8,
                   padding: "8px 12px",
-                  color: "#e8eaf0",
+                  color: "#333333",
                   fontSize: 13,
                   outline: "none",
                 }}
@@ -1639,10 +1640,10 @@ ${fullText}`,
               <button
                 onClick={handleManualSearch}
                 style={{
-                  background: "rgba(255,183,77,0.15)",
-                  border: "1px solid rgba(255,183,77,0.4)",
+                  background: "rgba(26,35,126,0.1)",
+                  border: "1px solid rgba(26,35,126,0.2)",
                   borderRadius: 8,
-                  color: "#ffb74d",
+                  color: "#1a237e",
                   padding: "8px 14px",
                   cursor: "pointer",
                   fontSize: 12,
@@ -1659,34 +1660,35 @@ ${fullText}`,
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
-          borderRight: "1px solid rgba(255,255,255,0.07)",
+          borderRight: "1px solid #e0e0e0",
+          background: "#ffffff",
         }}>
           <div style={{
             padding: "14px 20px 12px",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            borderBottom: "1px solid #e0e0e0",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "#8892a4" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "#888888" }}>
               ▌ AIアシスト — 対応ガイド
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
               {kbResults.length > 0 && kbResults.map((r, i) => (
                 <span key={i} style={{
-                  background: i === 0 ? "rgba(255,183,77,0.15)" : "rgba(255,255,255,0.05)",
-                  border: i === 0 ? "1px solid rgba(255,183,77,0.35)" : "1px solid rgba(255,255,255,0.1)",
+                  background: i === 0 ? "rgba(26,35,126,0.1)" : "#f5f5f5",
+                  border: i === 0 ? "1px solid rgba(26,35,126,0.2)" : "1px solid #e0e0e0",
                   borderRadius: 20,
                   padding: "3px 12px",
                   fontSize: 11,
-                  color: i === 0 ? "#ffb74d" : "#8892a4",
+                  color: i === 0 ? "#1a237e" : "#888888",
                   fontWeight: 700,
                 }}>
                   {r.category}
                 </span>
               ))}
               {aiLoading && aiEnabled && (
-                <span style={{ fontSize: 10, color: "#64b5f6", animation: "blink 1s infinite" }}>
+                <span style={{ fontSize: 10, color: "#1565c0", animation: "blink 1s infinite" }}>
                   AI分析中...
                 </span>
               )}
@@ -1742,24 +1744,24 @@ ${fullText}`,
                   <div style={{
                     animation: animateResult ? "fadeSlideIn 0.4s ease" : "none",
                     marginBottom: 16,
-                    background: "rgba(255,183,77,0.04)",
-                    border: "1px solid rgba(255,183,77,0.18)",
+                    background: "rgba(26,35,126,0.03)",
+                    border: "1px solid rgba(26,35,126,0.12)",
                     borderRadius: 10,
                     padding: "10px 14px",
                   }}>
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "#ffb74d", marginBottom: 8 }}>
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#1a237e", marginBottom: 8 }}>
                       クイックガイド — {kbResults[0].category}
                     </div>
                     {kbResults[0].steps.map((step, i) => (
                       <div key={i} style={{ display: "flex", gap: 8, marginBottom: 5, alignItems: "flex-start" }}>
-                        <span style={{ fontSize: 10, color: "#ffb74d", fontWeight: 700, minWidth: 14, paddingTop: 2 }}>
+                        <span style={{ fontSize: 10, color: "#1a237e", fontWeight: 700, minWidth: 14, paddingTop: 2 }}>
                           {i + 1}.
                         </span>
-                        <span style={{ fontSize: 12, color: "#c0cad8", lineHeight: 1.6 }}>{step}</span>
+                        <span style={{ fontSize: 12, color: "#555555", lineHeight: 1.6 }}>{step}</span>
                       </div>
                     ))}
                     {kbResults[0].tip && (
-                      <div style={{ fontSize: 11, color: "#64b5f6", marginTop: 8, paddingTop: 6, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                      <div style={{ fontSize: 11, color: "#1565c0", marginTop: 8, paddingTop: 6, borderTop: "1px solid #e0e0e0" }}>
                         💡 {kbResults[0].tip}
                       </div>
                     )}
@@ -1769,21 +1771,21 @@ ${fullText}`,
                 {/* AI Response from Dify */}
                 {(aiResponse || aiLoading || pinnedAiResponse) && (
                   <div style={{
-                    background: pinnedAiResponse ? "rgba(100,181,246,0.05)" : "rgba(76,175,80,0.04)",
-                    border: pinnedAiResponse ? "1px solid rgba(100,181,246,0.35)" : "1px solid rgba(76,175,80,0.15)",
+                    background: pinnedAiResponse ? "rgba(25,118,210,0.04)" : "rgba(76,175,80,0.04)",
+                    border: pinnedAiResponse ? "1px solid rgba(25,118,210,0.2)" : "1px solid rgba(76,175,80,0.15)",
                     borderRadius: 14,
                     padding: "18px 20px",
                     animation: "fadeSlideIn 0.4s ease",
                   }}>
                     <div style={{
-                      fontSize: 11, color: pinnedAiResponse ? "#64b5f6" : "#4caf50", fontWeight: 700,
+                      fontSize: 11, color: pinnedAiResponse ? "#1565c0" : "#4caf50", fontWeight: 700,
                       letterSpacing: "0.1em", marginBottom: 12,
                       display: "flex", alignItems: "center", gap: 8,
                     }}>
                       <span>🤖</span>
                       <span>AI ナレッジ回答</span>
                       {pinnedAiResponse && (
-                        <span style={{ fontSize: 10, color: "#64b5f6", background: "rgba(100,181,246,0.12)", border: "1px solid rgba(100,181,246,0.3)", borderRadius: 10, padding: "1px 7px" }}>
+                        <span style={{ fontSize: 10, color: "#1565c0", background: "rgba(25,118,210,0.08)", border: "1px solid rgba(25,118,210,0.2)", borderRadius: 10, padding: "1px 7px" }}>
                           ピン留め中
                         </span>
                       )}
@@ -1802,8 +1804,8 @@ ${fullText}`,
                         title={pinnedAiResponse ? "ピンを解除" : "この回答をピン留め"}
                         style={{
                           marginLeft: "auto",
-                          background: pinnedAiResponse ? "rgba(100,181,246,0.15)" : "rgba(255,255,255,0.06)",
-                          border: pinnedAiResponse ? "1px solid rgba(100,181,246,0.4)" : "1px solid rgba(255,255,255,0.12)",
+                          background: pinnedAiResponse ? "rgba(25,118,210,0.1)" : "#f5f5f5",
+                          border: pinnedAiResponse ? "1px solid rgba(25,118,210,0.3)" : "1px solid #e0e0e0",
                           borderRadius: 8,
                           padding: "6px 12px",
                           cursor: "pointer",
@@ -1818,7 +1820,7 @@ ${fullText}`,
                       kbResults.length > 0 ? (
                         // KB結果を先行表示（Dify回答待ちの間の即時ガイド）
                         <div style={{ animation: "fadeSlideIn 0.3s ease" }}>
-                          <div style={{ fontSize: 11, color: "#8892a4", marginBottom: 10 }}>
+                          <div style={{ fontSize: 11, color: "#888888", marginBottom: 10 }}>
                             キーワード一致による暫定ガイド（AI分析中...）
                           </div>
                           {kbResults[0].steps.map((step, i) => (
@@ -1834,14 +1836,14 @@ ${fullText}`,
                               }}>
                                 {i + 1}
                               </div>
-                              <div style={{ fontSize: 13, lineHeight: 1.7, color: "#b0bec5" }}>
+                              <div style={{ fontSize: 13, lineHeight: 1.7, color: "#555555" }}>
                                 {step}
                               </div>
                             </div>
                           ))}
                         </div>
                       ) : (
-                        <div style={{ fontSize: 13, color: "#8892a4", animation: "blink 1s infinite" }}>
+                        <div style={{ fontSize: 13, color: "#888888", animation: "blink 1s infinite" }}>
                           ナレッジを検索中...
                         </div>
                       )
@@ -1851,7 +1853,7 @@ ${fullText}`,
                         <div style={{
                           fontSize: 14,
                           lineHeight: 2,
-                          color: "#d0d8e8",
+                          color: "#333333",
                           whiteSpace: "pre-wrap",
                         }}>
                           {pinnedAiResponse || aiResponse}
@@ -1861,15 +1863,15 @@ ${fullText}`,
                           <div style={{
                             marginTop: 14,
                             paddingTop: 14,
-                            borderTop: "1px dashed rgba(255,255,255,0.1)",
+                            borderTop: "1px dashed rgba(0,0,0,0.1)",
                           }}>
-                            <div style={{ fontSize: 10, color: "#8892a4", letterSpacing: "0.08em", marginBottom: 8 }}>
+                            <div style={{ fontSize: 10, color: "#888888", letterSpacing: "0.08em", marginBottom: 8 }}>
                               最新の回答
                             </div>
                             <div style={{
                               fontSize: 14,
                               lineHeight: 2,
-                              color: "#a0aab8",
+                              color: "#666666",
                               whiteSpace: "pre-wrap",
                             }}>
                               {aiResponse}
@@ -1892,12 +1894,13 @@ ${fullText}`,
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
+          background: "#ffffff",
         }}>
           <div style={{
             padding: "14px 20px 12px",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            borderBottom: "1px solid #e0e0e0",
           }}>
-            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "#8892a4" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: "0.12em", color: "#888888" }}>
               ▌ 通話記録
             </div>
           </div>
@@ -1915,7 +1918,7 @@ ${fullText}`,
               <div key={key} style={{ marginBottom: 10 }}>
                 <label style={{
                   fontSize: 10,
-                  color: "#8892a4",
+                  color: "#888888",
                   letterSpacing: "0.05em",
                   display: "flex",
                   alignItems: "center",
@@ -1933,17 +1936,17 @@ ${fullText}`,
                     onChange={e => handleEditField(key, e.target.value)}
                     style={{
                       width: "100%",
-                      background: "rgba(255,255,255,0.05)",
-                      border: editableSummary[key] ? "1px solid rgba(76,175,80,0.3)" : "1px solid rgba(255,255,255,0.1)",
+                      background: "#ffffff",
+                      border: editableSummary[key] ? "1px solid rgba(76,175,80,0.3)" : "1px solid #e0e0e0",
                       borderRadius: 6,
                       padding: "7px 10px",
-                      color: "#e8eaf0",
+                      color: "#333333",
                       fontSize: 12,
                       outline: "none",
                       appearance: "none",
                     }}
                   >
-                    {options.map(o => <option key={o} value={o} style={{ background: "#111d3d" }}>{o || "（未選択）"}</option>)}
+                    {options.map(o => <option key={o} value={o} style={{ background: "#ffffff" }}>{o || "（未選択）"}</option>)}
                   </select>
                 ) : multiline ? (
                   <textarea
@@ -1953,11 +1956,11 @@ ${fullText}`,
                     placeholder={key === "summary" ? "通話終了時に自動要約されます" : ""}
                     style={{
                       width: "100%",
-                      background: "rgba(255,255,255,0.05)",
-                      border: editableSummary[key] ? "1px solid rgba(76,175,80,0.3)" : "1px solid rgba(255,255,255,0.1)",
+                      background: "#ffffff",
+                      border: editableSummary[key] ? "1px solid rgba(76,175,80,0.3)" : "1px solid #e0e0e0",
                       borderRadius: 6,
                       padding: "7px 10px",
-                      color: "#e8eaf0",
+                      color: "#333333",
                       fontSize: 12,
                       lineHeight: 1.7,
                       outline: "none",
@@ -1972,11 +1975,11 @@ ${fullText}`,
                     onChange={e => handleEditField(key, e.target.value)}
                     style={{
                       width: "100%",
-                      background: "rgba(255,255,255,0.05)",
-                      border: editableSummary[key] ? "1px solid rgba(76,175,80,0.3)" : "1px solid rgba(255,255,255,0.1)",
+                      background: "#ffffff",
+                      border: editableSummary[key] ? "1px solid rgba(76,175,80,0.3)" : "1px solid #e0e0e0",
                       borderRadius: 6,
                       padding: "7px 10px",
-                      color: "#e8eaf0",
+                      color: "#333333",
                       fontSize: 12,
                       outline: "none",
                       boxSizing: "border-box",
@@ -1996,14 +1999,14 @@ ${fullText}`,
         left: 0,
         right: 0,
         zIndex: 100,
-        borderTop: "1px solid rgba(255,255,255,0.07)",
-        background: "#0d1535",
+        borderTop: "1px solid #e0e0e0",
+        background: "#ffffff",
         padding: "14px 24px",
         display: "flex",
         alignItems: "center",
         justifyContent: "space-between",
       }}>
-        <div style={{ fontSize: 11, color: "#8892a4" }}>
+        <div style={{ fontSize: 11, color: "#888888" }}>
           {testCallRunning
             ? `🧪 テストコール実行中 — テキスト ${transcript.length} 件`
             : callActive
@@ -2084,33 +2087,33 @@ ${fullText}`,
             conversationIdRef.current = "";
             lastSentRef.current = "";
           }} style={{
-            background: "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.1)",
+            background: "#f5f5f5",
+            border: "1px solid #e0e0e0",
             borderRadius: 10,
             padding: "10px 20px",
-            color: "#8892a4",
+            color: "#888888",
             fontSize: 13,
             cursor: "pointer",
           }}>
             クリア
           </button>
           <button onClick={() => setShowCorrectionPanel(s => !s)} style={{
-            background: showCorrectionPanel ? "rgba(76,175,80,0.15)" : "rgba(255,255,255,0.06)",
-            border: showCorrectionPanel ? "1px solid rgba(76,175,80,0.4)" : "1px solid rgba(255,255,255,0.1)",
+            background: showCorrectionPanel ? "rgba(76,175,80,0.15)" : "#f5f5f5",
+            border: showCorrectionPanel ? "1px solid rgba(76,175,80,0.4)" : "1px solid #e0e0e0",
             borderRadius: 10,
             padding: "10px 14px",
-            color: showCorrectionPanel ? "#4caf50" : "#8892a4",
+            color: showCorrectionPanel ? "#4caf50" : "#888888",
             fontSize: 12,
             cursor: "pointer",
           }}>
             📝 補正辞書
           </button>
           <button onClick={() => setShowDeviceSettings(s => !s)} disabled={callActive} style={{
-            background: showDeviceSettings ? "rgba(171,71,188,0.15)" : "rgba(255,255,255,0.06)",
-            border: showDeviceSettings ? "1px solid rgba(171,71,188,0.4)" : "1px solid rgba(255,255,255,0.1)",
+            background: showDeviceSettings ? "rgba(171,71,188,0.15)" : "#f5f5f5",
+            border: showDeviceSettings ? "1px solid rgba(171,71,188,0.4)" : "1px solid #e0e0e0",
             borderRadius: 10,
             padding: "10px 14px",
-            color: showDeviceSettings ? "#ab47bc" : "#8892a4",
+            color: showDeviceSettings ? "#ab47bc" : "#888888",
             fontSize: 12,
             cursor: callActive ? "not-allowed" : "pointer",
             opacity: callActive ? 0.5 : 1,
@@ -2118,11 +2121,11 @@ ${fullText}`,
             🎧 音声設定
           </button>
           <button onClick={toggleDebug} style={{
-            background: debugMode ? "rgba(100,181,246,0.15)" : "rgba(255,255,255,0.06)",
-            border: debugMode ? "1px solid rgba(100,181,246,0.4)" : "1px solid rgba(255,255,255,0.1)",
+            background: debugMode ? "rgba(25,118,210,0.1)" : "#f5f5f5",
+            border: debugMode ? "1px solid rgba(25,118,210,0.3)" : "1px solid #e0e0e0",
             borderRadius: 10,
             padding: "10px 14px",
-            color: debugMode ? "#64b5f6" : "#8892a4",
+            color: debugMode ? "#1565c0" : "#888888",
             fontSize: 12,
             cursor: "pointer",
           }}>
@@ -2138,7 +2141,7 @@ ${fullText}`,
           bottom: 60,
           right: 24,
           zIndex: 200,
-          background: "#111d3d",
+          background: "#ffffff",
           border: "1px solid rgba(76,175,80,0.3)",
           borderRadius: 14,
           padding: "20px 24px",
@@ -2146,7 +2149,7 @@ ${fullText}`,
           maxHeight: "70vh",
           display: "flex",
           flexDirection: "column",
-          boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.15)",
           animation: "fadeSlideIn 0.3s ease",
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -2154,10 +2157,10 @@ ${fullText}`,
               📝 カスタム補正辞書
             </div>
             <button onClick={() => setShowCorrectionPanel(false)} style={{
-              background: "none", border: "none", color: "#8892a4", fontSize: 16, cursor: "pointer",
+              background: "none", border: "none", color: "#888888", fontSize: 16, cursor: "pointer",
             }}>✕</button>
           </div>
-          <div style={{ fontSize: 10, color: "#8892a4", marginBottom: 12, lineHeight: 1.6 }}>
+          <div style={{ fontSize: 10, color: "#888888", marginBottom: 12, lineHeight: 1.6 }}>
             音声認識の誤り → 正しいテキスト のペアを登録すると、以降の認識結果に自動適用されます。
           </div>
 
@@ -2165,8 +2168,8 @@ ${fullText}`,
           <div style={{
             display: "flex", flexDirection: "column", gap: 6, marginBottom: 14,
             padding: "10px 12px",
-            background: "rgba(255,255,255,0.02)",
-            border: "1px solid rgba(255,255,255,0.06)",
+            background: "#f9f9f9",
+            border: "1px solid #e0e0e0",
             borderRadius: 10,
           }}>
             <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
@@ -2177,11 +2180,11 @@ ${fullText}`,
                 placeholder="例: いっつの宮"
                 style={{
                   flex: 1,
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "#ffffff",
+                  border: "1px solid #e0e0e0",
                   borderRadius: 8,
                   padding: "8px 10px",
-                  color: "#e8eaf0",
+                  color: "#333333",
                   fontSize: 12,
                   outline: "none",
                   minWidth: 0,
@@ -2204,11 +2207,11 @@ ${fullText}`,
                 }}
                 style={{
                   flex: 1,
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.12)",
+                  background: "#ffffff",
+                  border: "1px solid #e0e0e0",
                   borderRadius: 8,
                   padding: "8px 10px",
-                  color: "#e8eaf0",
+                  color: "#333333",
                   fontSize: 12,
                   outline: "none",
                   minWidth: 0,
@@ -2226,7 +2229,7 @@ ${fullText}`,
               }}
               disabled={!correctionFrom.trim() || !correctionTo.trim()}
               style={{
-                background: correctionFrom.trim() && correctionTo.trim() ? "rgba(76,175,80,0.2)" : "rgba(255,255,255,0.04)",
+                background: correctionFrom.trim() && correctionTo.trim() ? "rgba(76,175,80,0.2)" : "#f5f5f5",
                 border: "1px solid rgba(76,175,80,0.3)",
                 borderRadius: 8,
                 padding: "8px 0",
@@ -2246,11 +2249,11 @@ ${fullText}`,
           <div style={{
             flex: 1,
             overflowY: "auto",
-            borderTop: "1px solid rgba(255,255,255,0.06)",
+            borderTop: "1px solid #e0e0e0",
             paddingTop: 10,
           }}>
             {customCorrections.length === 0 ? (
-              <div style={{ textAlign: "center", color: "#555", fontSize: 11, padding: "20px 0" }}>
+              <div style={{ textAlign: "center", color: "#999", fontSize: 11, padding: "20px 0" }}>
                 登録された補正パターンはありません
               </div>
             ) : (
@@ -2261,12 +2264,12 @@ ${fullText}`,
                   gap: 8,
                   padding: "6px 8px",
                   marginBottom: 4,
-                  background: "rgba(255,255,255,0.02)",
+                  background: "#f9f9f9",
                   borderRadius: 6,
                   fontSize: 12,
                 }}>
                   <span style={{ color: "#ef5350", flex: 1, wordBreak: "break-all" }}>{c.from}</span>
-                  <span style={{ color: "#8892a4", flexShrink: 0 }}>→</span>
+                  <span style={{ color: "#888888", flexShrink: 0 }}>→</span>
                   <span style={{ color: "#4caf50", flex: 1, wordBreak: "break-all" }}>{c.to}</span>
                   <button
                     onClick={() => {
@@ -2276,7 +2279,7 @@ ${fullText}`,
                     style={{
                       background: "none",
                       border: "none",
-                      color: "#8892a4",
+                      color: "#888888",
                       fontSize: 14,
                       cursor: "pointer",
                       padding: "2px 6px",
@@ -2288,7 +2291,7 @@ ${fullText}`,
               ))
             )}
           </div>
-          <div style={{ fontSize: 10, color: "#555", marginTop: 8, textAlign: "right" }}>
+          <div style={{ fontSize: 10, color: "#999", marginTop: 8, textAlign: "right" }}>
             {customCorrections.length} 件登録済み
           </div>
         </div>
@@ -2301,12 +2304,12 @@ ${fullText}`,
           bottom: 60,
           right: 24,
           zIndex: 200,
-          background: "#111d3d",
+          background: "#ffffff",
           border: "1px solid rgba(171,71,188,0.3)",
           borderRadius: 14,
           padding: "20px 24px",
           width: 380,
-          boxShadow: "0 12px 40px rgba(0,0,0,0.5)",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.15)",
           animation: "fadeSlideIn 0.3s ease",
         }}>
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16 }}>
@@ -2314,7 +2317,7 @@ ${fullText}`,
               🎧 音声デバイス設定
             </div>
             <button onClick={() => setShowDeviceSettings(false)} style={{
-              background: "none", border: "none", color: "#8892a4", fontSize: 16, cursor: "pointer",
+              background: "none", border: "none", color: "#888888", fontSize: 16, cursor: "pointer",
             }}>✕</button>
           </div>
 
@@ -2322,14 +2325,14 @@ ${fullText}`,
           <div style={{
             display: "flex", alignItems: "center", gap: 12, marginBottom: 16,
             padding: "10px 14px",
-            background: dualMode ? "rgba(171,71,188,0.08)" : "rgba(255,255,255,0.03)",
-            border: dualMode ? "1px solid rgba(171,71,188,0.25)" : "1px solid rgba(255,255,255,0.08)",
+            background: dualMode ? "rgba(171,71,188,0.08)" : "#f9f9f9",
+            border: dualMode ? "1px solid rgba(171,71,188,0.25)" : "1px solid #e0e0e0",
             borderRadius: 10,
             cursor: "pointer",
           }} onClick={() => setDualMode(d => !d)}>
             <div style={{
               width: 38, height: 20, borderRadius: 10,
-              background: dualMode ? "#ab47bc" : "rgba(255,255,255,0.15)",
+              background: dualMode ? "#ab47bc" : "#ccc",
               position: "relative", transition: "background 0.2s",
             }}>
               <div style={{
@@ -2341,10 +2344,10 @@ ${fullText}`,
               }}/>
             </div>
             <div>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#e8eaf0" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#333333" }}>
                 2ch 音声分離モード
               </div>
-              <div style={{ fontSize: 10, color: "#8892a4", marginTop: 2 }}>
+              <div style={{ fontSize: 10, color: "#888888", marginTop: 2 }}>
                 オペレーターとお客様の音声を分離して認識
               </div>
             </div>
@@ -2352,33 +2355,33 @@ ${fullText}`,
 
           {/* デバイス選択 */}
           {audioDevices.length === 0 ? (
-            <div style={{ fontSize: 11, color: "#8892a4", textAlign: "center", padding: "12px 0" }}>
+            <div style={{ fontSize: 11, color: "#888888", textAlign: "center", padding: "12px 0" }}>
               オーディオデバイスが検出されませんでした。<br/>マイクの権限を許可してページをリロードしてください。
             </div>
           ) : (
             <>
               <div style={{ marginBottom: 12 }}>
-                <label style={{ fontSize: 10, color: "#64b5f6", letterSpacing: "0.08em", marginBottom: 6, display: "block" }}>
-                  🎤 オペレーター マイク {!dualMode && <span style={{ color: "#8892a4" }}>（シングルモード: メインマイク）</span>}
+                <label style={{ fontSize: 10, color: "#1565c0", letterSpacing: "0.08em", marginBottom: 6, display: "block" }}>
+                  🎤 オペレーター マイク {!dualMode && <span style={{ color: "#888888" }}>（シングルモード: メインマイク）</span>}
                 </label>
                 <select
                   value={operatorDeviceId}
                   onChange={e => setOperatorDeviceId(e.target.value)}
                   style={{
                     width: "100%",
-                    background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(100,181,246,0.25)",
+                    background: "#ffffff",
+                    border: "1px solid rgba(25,118,210,0.25)",
                     borderRadius: 8,
                     padding: "8px 10px",
-                    color: "#e8eaf0",
+                    color: "#333333",
                     fontSize: 12,
                     outline: "none",
                     appearance: "none",
                   }}
                 >
-                  <option value="" style={{ background: "#111d3d" }}>（デフォルトデバイス）</option>
+                  <option value="" style={{ background: "#ffffff" }}>（デフォルトデバイス）</option>
                   {audioDevices.map(d => (
-                    <option key={d.deviceId} value={d.deviceId} style={{ background: "#111d3d" }}>
+                    <option key={d.deviceId} value={d.deviceId} style={{ background: "#ffffff" }}>
                       {d.label || `デバイス ${d.deviceId.slice(0, 8)}...`}
                     </option>
                   ))}
@@ -2387,7 +2390,7 @@ ${fullText}`,
 
               {dualMode && (
                 <div style={{ marginBottom: 12 }}>
-                  <label style={{ fontSize: 10, color: "#ffb74d", letterSpacing: "0.08em", marginBottom: 6, display: "block" }}>
+                  <label style={{ fontSize: 10, color: "#1a237e", letterSpacing: "0.08em", marginBottom: 6, display: "block" }}>
                     📞 お客様音声（VB-CABLE等の仮想デバイス）
                   </label>
                   <select
@@ -2395,19 +2398,19 @@ ${fullText}`,
                     onChange={e => setCustomerDeviceId(e.target.value)}
                     style={{
                       width: "100%",
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,183,77,0.25)",
+                      background: "#ffffff",
+                      border: "1px solid rgba(26,35,126,0.25)",
                       borderRadius: 8,
                       padding: "8px 10px",
-                      color: "#e8eaf0",
+                      color: "#333333",
                       fontSize: 12,
                       outline: "none",
                       appearance: "none",
                     }}
                   >
-                    <option value="" style={{ background: "#111d3d" }}>（デバイスを選択）</option>
+                    <option value="" style={{ background: "#ffffff" }}>（デバイスを選択）</option>
                     {audioDevices.map(d => (
-                      <option key={d.deviceId} value={d.deviceId} style={{ background: "#111d3d" }}>
+                      <option key={d.deviceId} value={d.deviceId} style={{ background: "#ffffff" }}>
                         {d.label || `デバイス ${d.deviceId.slice(0, 8)}...`}
                       </option>
                     ))}
@@ -2423,14 +2426,14 @@ ${fullText}`,
               {dualMode && (
                 <div style={{
                   padding: "10px 12px",
-                  background: "rgba(255,183,77,0.06)",
-                  border: "1px solid rgba(255,183,77,0.15)",
+                  background: "rgba(26,35,126,0.03)",
+                  border: "1px solid rgba(26,35,126,0.12)",
                   borderRadius: 8,
                   fontSize: 10,
-                  color: "#8892a4",
+                  color: "#888888",
                   lineHeight: 1.7,
                 }}>
-                  <strong style={{ color: "#ffb74d" }}>セットアップ手順:</strong><br/>
+                  <strong style={{ color: "#1a237e" }}>セットアップ手順:</strong><br/>
                   1. VB-CABLE をインストール<br/>
                   2. Smart PBX の出力先を「CABLE Input」に設定<br/>
                   3. Windows サウンド設定で「CABLE Output」→「このデバイスを聴く」を有効化<br/>
@@ -2439,18 +2442,18 @@ ${fullText}`,
               )}
 
               {/* VB-Audio 自動トリガー */}
-              <div style={{ marginTop: 16, borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 16 }}>
+              <div style={{ marginTop: 16, borderTop: "1px solid #e0e0e0", paddingTop: 16 }}>
                 <div style={{
                   display: "flex", alignItems: "center", gap: 12, marginBottom: 10,
                   padding: "10px 14px",
-                  background: triggerEnabled ? "rgba(76,175,80,0.08)" : "rgba(255,255,255,0.03)",
-                  border: triggerEnabled ? "1px solid rgba(76,175,80,0.25)" : "1px solid rgba(255,255,255,0.08)",
+                  background: triggerEnabled ? "rgba(76,175,80,0.08)" : "#f9f9f9",
+                  border: triggerEnabled ? "1px solid rgba(76,175,80,0.25)" : "1px solid #e0e0e0",
                   borderRadius: 10,
                   cursor: "pointer",
                 }} onClick={() => setTriggerEnabled(v => !v)}>
                   <div style={{
                     width: 38, height: 20, borderRadius: 10,
-                    background: triggerEnabled ? "#4caf50" : "rgba(255,255,255,0.15)",
+                    background: triggerEnabled ? "#4caf50" : "#ccc",
                     position: "relative", transition: "background 0.2s", flexShrink: 0,
                   }}>
                     <div style={{
@@ -2462,7 +2465,7 @@ ${fullText}`,
                     }}/>
                   </div>
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#e8eaf0", display: "flex", alignItems: "center", gap: 6 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#333333", display: "flex", alignItems: "center", gap: 6 }}>
                       VB-Audio 自動トリガー
                       {triggerEnabled && triggerDeviceId && triggerStreamRef.current && (
                         <span style={{
@@ -2471,7 +2474,7 @@ ${fullText}`,
                         }}>監視中</span>
                       )}
                     </div>
-                    <div style={{ fontSize: 10, color: "#8892a4", marginTop: 2 }}>
+                    <div style={{ fontSize: 10, color: "#888888", marginTop: 2 }}>
                       音声を検出したら自動で通話開始（非通話中のみ）
                     </div>
                   </div>
@@ -2487,19 +2490,19 @@ ${fullText}`,
                       onChange={e => setTriggerDeviceId(e.target.value)}
                       style={{
                         width: "100%",
-                        background: "rgba(255,255,255,0.05)",
+                        background: "#ffffff",
                         border: "1px solid rgba(76,175,80,0.25)",
                         borderRadius: 8,
                         padding: "8px 10px",
-                        color: "#e8eaf0",
+                        color: "#333333",
                         fontSize: 12,
                         outline: "none",
                         appearance: "none",
                       }}
                     >
-                      <option value="" style={{ background: "#111d3d" }}>（デバイスを選択）</option>
+                      <option value="" style={{ background: "#ffffff" }}>（デバイスを選択）</option>
                       {audioDevices.map(d => (
-                        <option key={d.deviceId} value={d.deviceId} style={{ background: "#111d3d" }}>
+                        <option key={d.deviceId} value={d.deviceId} style={{ background: "#ffffff" }}>
                           {d.label || `デバイス ${d.deviceId.slice(0, 8)}...`}
                         </option>
                       ))}
@@ -2531,27 +2534,27 @@ ${fullText}`,
           animation: "fadeSlideIn 0.3s ease",
         }}>
           <div style={{
-            background: "#111d3d",
-            border: "1px solid rgba(255,183,77,0.25)",
+            background: "#ffffff",
+            border: "1px solid #e0e0e0",
             borderRadius: 16,
             width: "90%",
             maxWidth: 520,
             maxHeight: "85vh",
             display: "flex",
             flexDirection: "column",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.15)",
           }}>
             {/* Modal Header */}
             <div style={{
               padding: "18px 24px 14px",
-              borderBottom: "1px solid rgba(255,255,255,0.08)",
+              borderBottom: "1px solid #e0e0e0",
               display: "flex",
               alignItems: "center",
               justifyContent: "space-between",
             }}>
               <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                 <span style={{ fontSize: 18 }}>📋</span>
-                <span style={{ fontSize: 14, fontWeight: 700, color: "#ffb74d", letterSpacing: "0.05em" }}>
+                <span style={{ fontSize: 14, fontWeight: 700, color: "#1a237e", letterSpacing: "0.05em" }}>
                   通話記録の保存
                 </span>
               </div>
@@ -2560,7 +2563,7 @@ ${fullText}`,
                 style={{
                   background: "none",
                   border: "none",
-                  color: "#8892a4",
+                  color: "#888888",
                   fontSize: 18,
                   cursor: "pointer",
                   padding: "4px 8px",
@@ -2576,11 +2579,11 @@ ${fullText}`,
               <div style={{
                 margin: "12px 24px 0",
                 padding: "8px 14px",
-                background: "rgba(100,181,246,0.08)",
-                border: "1px solid rgba(100,181,246,0.25)",
+                background: "rgba(25,118,210,0.06)",
+                border: "1px solid rgba(25,118,210,0.2)",
                 borderRadius: 8,
                 fontSize: 12,
-                color: "#64b5f6",
+                color: "#1565c0",
                 animation: "blink 1s infinite",
               }}>
                 AI が通話内容を分析中...
@@ -2630,7 +2633,7 @@ ${fullText}`,
                 <div key={key} style={{ marginBottom: 14 }}>
                   <label style={{
                     fontSize: 11,
-                    color: "#8892a4",
+                    color: "#888888",
                     letterSpacing: "0.08em",
                     display: "flex",
                     alignItems: "center",
@@ -2645,17 +2648,17 @@ ${fullText}`,
                       onChange={e => handleEditField(key, e.target.value)}
                       style={{
                         width: "100%",
-                        background: "rgba(255,255,255,0.05)",
-                        border: "1px solid rgba(255,255,255,0.12)",
+                        background: "#ffffff",
+                        border: "1px solid #e0e0e0",
                         borderRadius: 8,
                         padding: "9px 12px",
-                        color: "#e8eaf0",
+                        color: "#333333",
                         fontSize: 13,
                         outline: "none",
                         appearance: "none",
                       }}
                     >
-                      {options.map(o => <option key={o} value={o} style={{ background: "#111d3d" }}>{o}</option>)}
+                      {options.map(o => <option key={o} value={o} style={{ background: "#ffffff" }}>{o}</option>)}
                     </select>
                   ) : multiline ? (
                     <textarea
@@ -2664,11 +2667,11 @@ ${fullText}`,
                       rows={3}
                       style={{
                         width: "100%",
-                        background: "rgba(255,255,255,0.05)",
-                        border: "1px solid rgba(255,255,255,0.12)",
+                        background: "#ffffff",
+                        border: "1px solid #e0e0e0",
                         borderRadius: 8,
                         padding: "9px 12px",
-                        color: "#e8eaf0",
+                        color: "#333333",
                         fontSize: 13,
                         lineHeight: 1.7,
                         outline: "none",
@@ -2683,11 +2686,11 @@ ${fullText}`,
                       onChange={e => handleEditField(key, e.target.value)}
                       style={{
                         width: "100%",
-                        background: "rgba(255,255,255,0.05)",
-                        border: "1px solid rgba(255,255,255,0.12)",
+                        background: "#ffffff",
+                        border: "1px solid #e0e0e0",
                         borderRadius: 8,
                         padding: "9px 12px",
-                        color: "#e8eaf0",
+                        color: "#333333",
                         fontSize: 13,
                         outline: "none",
                         boxSizing: "border-box",
@@ -2701,8 +2704,8 @@ ${fullText}`,
               {callSummary && callSummary.callback_needed && (
                 <div style={{
                   padding: "10px 14px",
-                  background: "rgba(255,183,77,0.08)",
-                  border: "1px solid rgba(255,183,77,0.3)",
+                  background: "rgba(26,35,126,0.05)",
+                  border: "1px solid rgba(26,35,126,0.2)",
                   borderRadius: 10,
                   marginBottom: 16,
                   display: "flex",
@@ -2711,11 +2714,11 @@ ${fullText}`,
                 }}>
                   <span style={{ fontSize: 16 }}>⚠️</span>
                   <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#ffb74d", marginBottom: 2 }}>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#1a237e", marginBottom: 2 }}>
                       折り返し連絡が必要です
                     </div>
                     {callSummary.callback_reason && (
-                      <div style={{ fontSize: 11, color: "#8892a4" }}>
+                      <div style={{ fontSize: 11, color: "#888888" }}>
                         {callSummary.callback_reason}
                       </div>
                     )}
@@ -2729,7 +2732,7 @@ ${fullText}`,
             {/* Footer: 常に下部に固定 */}
             <div style={{
               padding: "14px 24px",
-              borderTop: "1px solid rgba(255,255,255,0.08)",
+              borderTop: "1px solid #e0e0e0",
               display: "flex",
               gap: 10,
               flexShrink: 0,
@@ -2739,11 +2742,11 @@ ${fullText}`,
                 disabled={saveStatus === "saving"}
                 style={{
                   flex: 1,
-                  background: "linear-gradient(135deg, #ffb74d, #ff8f00)",
+                  background: "linear-gradient(135deg, #1a237e, #283593)",
                   border: "none",
                   borderRadius: 10,
                   padding: "11px 20px",
-                  color: "#0a0f1e",
+                  color: "#ffffff",
                   fontSize: 13,
                   fontWeight: 700,
                   cursor: saveStatus === "saving" ? "wait" : "pointer",
@@ -2756,11 +2759,11 @@ ${fullText}`,
               <button
                 onClick={() => setShowSummaryModal(false)}
                 style={{
-                  background: "rgba(255,255,255,0.06)",
-                  border: "1px solid rgba(255,255,255,0.15)",
+                  background: "#f5f5f5",
+                  border: "1px solid #e0e0e0",
                   borderRadius: 10,
                   padding: "11px 18px",
-                  color: "#8892a4",
+                  color: "#888888",
                   fontSize: 13,
                   cursor: "pointer",
                 }}
@@ -2788,10 +2791,10 @@ ${fullText}`,
         }
         ::-webkit-scrollbar { width: 4px; }
         ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
-        input::placeholder { color: #4a5568; }
+        ::-webkit-scrollbar-thumb { background: rgba(0,0,0,0.15); border-radius: 4px; }
+        input::placeholder { color: #999; }
         select::-ms-expand { display: none; }
-        textarea::placeholder { color: #4a5568; }
+        textarea::placeholder { color: #999; }
       `}</style>
     </div>
   );
