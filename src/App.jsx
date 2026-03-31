@@ -5,12 +5,38 @@ import { normalizeAddress, loadCustomCorrections, addCustomCorrection, removeCus
 // Electron 環境検出 — true のとき Whisper ローカル文字起こしを使用
 const isElectron = window.electronAPI?.isElectron ?? false;
 
-const DIFY_API_URL = import.meta.env.VITE_DIFY_API_URL || "https://api.dify.ai/v1/chat-messages";
-const DIFY_API_KEY = import.meta.env.VITE_DIFY_API_KEY || "";
-const GAS_WEBHOOK_URL = import.meta.env.VITE_GAS_URL || "";
-const GAS_API_KEY = import.meta.env.VITE_GAS_API_KEY || "";
+// ── API設定の永続化 ──
+const API_SETTINGS_KEY = "api_settings";
+const API_DEFAULTS = {
+  difyApiUrl: import.meta.env.VITE_DIFY_API_URL || "https://api.dify.ai/v1/chat-messages",
+  difyApiKey: import.meta.env.VITE_DIFY_API_KEY || "",
+  gasUrl: import.meta.env.VITE_GAS_URL || "",
+  gasApiKey: import.meta.env.VITE_GAS_API_KEY || "",
+};
 
-const MOCK_KB = [
+function loadApiSettings() {
+  try {
+    const raw = localStorage.getItem(API_SETTINGS_KEY);
+    if (!raw) return { ...API_DEFAULTS };
+    const saved = JSON.parse(raw);
+    return {
+      difyApiUrl: saved.difyApiUrl || API_DEFAULTS.difyApiUrl,
+      difyApiKey: saved.difyApiKey || API_DEFAULTS.difyApiKey,
+      gasUrl: saved.gasUrl || API_DEFAULTS.gasUrl,
+      gasApiKey: saved.gasApiKey || API_DEFAULTS.gasApiKey,
+    };
+  } catch {
+    return { ...API_DEFAULTS };
+  }
+}
+
+function saveApiSettings(settings) {
+  localStorage.setItem(API_SETTINGS_KEY, JSON.stringify(settings));
+}
+
+// ── ナレッジベースの永続化 ──
+const KB_SETTINGS_KEY = "knowledge_base";
+const DEFAULT_KB = [
   {
     keywords: ["繋がらない","接続できない","インターネット","ネット","切れる","切断"],
     category: "接続障害",
@@ -68,10 +94,25 @@ const MOCK_KB = [
   },
 ];
 
-function searchKB(text) {
+function loadKB() {
+  try {
+    const raw = localStorage.getItem(KB_SETTINGS_KEY);
+    if (!raw) return [...DEFAULT_KB];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) && parsed.length > 0 ? parsed : [...DEFAULT_KB];
+  } catch {
+    return [...DEFAULT_KB];
+  }
+}
+
+function saveKB(items) {
+  localStorage.setItem(KB_SETTINGS_KEY, JSON.stringify(items));
+}
+
+function searchKBItems(kb, text) {
   if (!text || text.length < 3) return [];
   const lower = text.toLowerCase().replace(/\s/g, "");
-  return MOCK_KB
+  return kb
     .map(item => ({ ...item, score: item.keywords.filter(k => lower.includes(k)).length }))
     .filter(item => item.score > 0)
     .sort((a, b) => b.score - a.score)
@@ -177,6 +218,17 @@ export default function App() {
     callback_assignee: "",
     operator: "",
   });
+  // ── API設定 ──
+  const [apiSettings, setApiSettings] = useState(() => loadApiSettings());
+  const [showApiSettings, setShowApiSettings] = useState(false);
+  const [apiSettingsForm, setApiSettingsForm] = useState(() => loadApiSettings());
+  // ── ナレッジベース ──
+  const [kbItems, setKbItems] = useState(() => loadKB());
+  const [showKbEditor, setShowKbEditor] = useState(false);
+  const [kbEditIndex, setKbEditIndex] = useState(null); // null = 非表示, -1 = 新規追加, 0+ = 編集
+  const [kbEditForm, setKbEditForm] = useState({ category: "", keywords: "", steps: "", tip: "" });
+  // ── Whisper モデル設定 ──
+  const [whisperModel, setWhisperModel] = useState(() => localStorage.getItem("whisper_model") || "small");
   // ── デバイス選択 ──
   const [audioDevices, setAudioDevices] = useState([]);
   const [operatorDeviceId, setOperatorDeviceId] = useState(() => loadDeviceSettings().operatorDeviceId);
@@ -200,7 +252,7 @@ export default function App() {
   const [callerInfo, setCallerInfo] = useState(null);
   const [quickPhone, setQuickPhone] = useState("");
   const cbRecordsRef = useRef([]);
-  const lastPhoneTimestampRef = useRef(null);
+
   const operatorIframeRef = useRef(null);
   const customerIframeRef = useRef(null);
   const customerInterimRef = useRef("");
@@ -267,13 +319,13 @@ export default function App() {
 
   // ── コールバックデータ定期取得（着信時の顧客照合用） ──
   useEffect(() => {
-    if (!isLoggedIn || !GAS_WEBHOOK_URL) return;
+    if (!isLoggedIn || !apiSettings.gasUrl) return;
     const loadCbRecords = async () => {
       try {
-        const res = await fetch(GAS_WEBHOOK_URL, {
+        const res = await fetch(apiSettings.gasUrl, {
           method: "POST",
           headers: { "Content-Type": "text/plain" },
-          body: JSON.stringify({ action: "get_callbacks", api_key: GAS_API_KEY }),
+          body: JSON.stringify({ action: "get_callbacks", api_key: apiSettings.gasApiKey }),
         });
         const data = await res.json();
         cbRecordsRef.current = data.records || [];
@@ -282,7 +334,7 @@ export default function App() {
     loadCbRecords();
     const iv = setInterval(loadCbRecords, 30000);
     return () => clearInterval(iv);
-  }, [isLoggedIn]);
+  }, [isLoggedIn, apiSettings.gasUrl, apiSettings.gasApiKey]);
 
   // ── 着信番号照合 ──
   const lookupPhone = useCallback((phoneInput) => {
@@ -318,29 +370,7 @@ export default function App() {
     }
   }, []);
 
-  // ── phone-watcher 連携: ポーリング（未起動時は頻度を下げる） ──
-  useEffect(() => {
-    if (!isLoggedIn) return;
-    let timerId = null;
-    let interval = 3000;
-    const poll = async () => {
-      try {
-        const res = await fetch("http://localhost:3456/latest-call");
-        const data = await res.json();
-        interval = 3000;
-        if (data.phone && data.timestamp && data.timestamp !== lastPhoneTimestampRef.current) {
-          lastPhoneTimestampRef.current = data.timestamp;
-          lookupPhone(data.phone);
-          fetch("http://localhost:3456/clear", { method: "POST" }).catch(() => {});
-        }
-      } catch {
-        interval = 30000;
-      }
-      timerId = setTimeout(poll, interval);
-    };
-    timerId = setTimeout(poll, 3000);
-    return () => clearTimeout(timerId);
-  }, [isLoggedIn]);
+
 
   useEffect(() => {
     if (transcriptRef.current) {
@@ -375,10 +405,10 @@ export default function App() {
       };
       if (conversationIdRef.current) body.conversation_id = conversationIdRef.current;
 
-      const res = await fetch(DIFY_API_URL, {
+      const res = await fetch(apiSettings.difyApiUrl, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${DIFY_API_KEY}`,
+          "Authorization": `Bearer ${apiSettings.difyApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
@@ -467,10 +497,10 @@ export default function App() {
 
     setSaveStatus("summarizing");
     try {
-      const res = await fetch(DIFY_API_URL, {
+      const res = await fetch(apiSettings.difyApiUrl, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${DIFY_API_KEY}`,
+          "Authorization": `Bearer ${apiSettings.difyApiKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
@@ -535,8 +565,8 @@ ${fullText}`,
   }, []);
 
   const saveToSpreadsheet = useCallback(async (data) => {
-    if (!GAS_WEBHOOK_URL) {
-      console.warn("GAS_WEBHOOK_URL が未設定です。");
+    if (!apiSettings.gasUrl) {
+      console.warn("GAS URL が未設定です。設定画面から入力してください。");
       return false;
     }
 
@@ -549,13 +579,13 @@ ${fullText}`,
     try {
       // GASはCORSプリフライトに非対応のため、no-corsモードで送信
       // text/plainにすることでプリフライトを回避
-      await fetch(GAS_WEBHOOK_URL, {
+      await fetch(apiSettings.gasUrl, {
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "text/plain" },
         body: JSON.stringify({
           ...data,
-          api_key: GAS_API_KEY,
+          api_key: apiSettings.gasApiKey,
           save_to_main: saveToMain,
           save_to_form: saveToForm,
         }),
@@ -566,7 +596,7 @@ ${fullText}`,
       console.error("Spreadsheet save error:", err);
       return false;
     }
-  }, [saveToMain, saveToForm]);
+  }, [saveToMain, saveToForm, apiSettings.gasUrl, apiSettings.gasApiKey]);
 
   // ── AIアシスト手動トリガー ──
   const triggerDifyAssist = useCallback(() => {
@@ -597,7 +627,7 @@ ${fullText}`,
       }];
       transcriptLinesRef.current = lines;
       const fullText = lines.map(l => l.text).join(" ");
-      const found = searchKB(fullText);
+      const found = searchKBItems(kbItems,fullText);
       if (found.length > 0) {
         setAnimateResult(false);
         setTimeout(() => { setKbResults(found); setAnimateResult(true); }, 50);
@@ -640,7 +670,7 @@ ${fullText}`,
             }
             setInterimText(data.text);
             // interimでもKB検索+Dify APIを実行
-            const found = searchKB(data.text);
+            const found = searchKBItems(kbItems,data.text);
             if (found.length > 0) {
               setAnimateResult(false);
               setTimeout(() => { setKbResults(found); setAnimateResult(true); }, 50);
@@ -710,7 +740,7 @@ ${fullText}`,
           addDebug(`... result(interim): "${interim}"`);
           interimRef.current = interim;
           setInterimText(interim);
-          const found = searchKB(interim);
+          const found = searchKBItems(kbItems,interim);
           if (found.length > 0) {
             setAnimateResult(false);
             setTimeout(() => { setKbResults(found); setAnimateResult(true); }, 50);
@@ -922,7 +952,7 @@ ${fullText}`,
       if (event.data.type !== "chunk" || !callActiveRef.current) return;
       try {
         const resampled = await resampleTo16k(event.data.samples, audioCtx.sampleRate);
-        const result = await window.electronAPI.transcribe(resampled.buffer);
+        const result = await window.electronAPI.transcribe(resampled.buffer, whisperModel);
         if (result?.text?.trim()) {
           addLine(normalizeAddress(result.text.trim()), speaker);
         }
@@ -1168,8 +1198,8 @@ ${fullText}`,
       }).join("\n");
     }
     const saved = await saveToSpreadsheet(dataToSave);
-    setSaveStatus(saved ? "saved" : (GAS_WEBHOOK_URL ? "error" : "saved"));
-    if (saved || !GAS_WEBHOOK_URL) {
+    setSaveStatus(saved ? "saved" : (apiSettings.gasUrl ? "error" : "saved"));
+    if (saved || !apiSettings.gasUrl) {
       setTimeout(() => setShowSummaryModal(false), 1200);
     }
   };
@@ -2339,6 +2369,28 @@ ${fullText}`,
           }}>
             💾 保存先設定
           </button>
+          <button onClick={() => { setApiSettingsForm({ ...apiSettings }); setShowApiSettings(s => !s); }} style={{
+            background: showApiSettings ? "rgba(38,198,218,0.15)" : "#3a3f48",
+            border: showApiSettings ? "1px solid rgba(38,198,218,0.4)" : "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 10,
+            padding: "10px 14px",
+            color: showApiSettings ? "#26c6da" : "#9a9da4",
+            fontSize: 12,
+            cursor: "pointer",
+          }}>
+            🔑 API設定
+          </button>
+          <button onClick={() => setShowKbEditor(s => !s)} style={{
+            background: showKbEditor ? "rgba(102,187,106,0.15)" : "#3a3f48",
+            border: showKbEditor ? "1px solid rgba(102,187,106,0.4)" : "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 10,
+            padding: "10px 14px",
+            color: showKbEditor ? "#66bb6a" : "#9a9da4",
+            fontSize: 12,
+            cursor: "pointer",
+          }}>
+            📚 KB編集
+          </button>
           <button onClick={toggleDebug} style={{
             background: debugMode ? "rgba(100,181,246,0.1)" : "#3a3f48",
             border: debugMode ? "1px solid rgba(100,181,246,0.3)" : "1px solid rgba(255,255,255,0.1)",
@@ -2541,6 +2593,267 @@ ${fullText}`,
         </div>
       )}
 
+      {/* Knowledge Base Editor Panel */}
+      {showKbEditor && (
+        <div style={{
+          position: "fixed",
+          bottom: 60,
+          right: 24,
+          zIndex: 200,
+          background: "#32363e",
+          border: "1px solid rgba(102,187,106,0.3)",
+          borderRadius: 14,
+          padding: "20px 24px",
+          width: 480,
+          maxHeight: "80vh",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
+          animation: "fadeSlideIn 0.3s ease",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <span style={{ color: "#66bb6a", fontWeight: 700, fontSize: 14 }}>📚 ナレッジベース編集</span>
+            <button onClick={() => { setShowKbEditor(false); setKbEditIndex(null); }} style={{
+              background: "none", border: "none", color: "#9a9da4", fontSize: 16, cursor: "pointer",
+            }}>✕</button>
+          </div>
+
+          {/* 編集フォーム */}
+          {kbEditIndex !== null ? (
+            <div style={{ marginBottom: 14, padding: "12px 14px", background: "#383c44", borderRadius: 10, border: "1px solid rgba(102,187,106,0.2)" }}>
+              <div style={{ fontSize: 11, color: "#66bb6a", fontWeight: 700, marginBottom: 8 }}>
+                {kbEditIndex >= 0 ? `編集: ${kbItems[kbEditIndex]?.category}` : "新規カテゴリ追加"}
+              </div>
+              <label style={{ fontSize: 10, color: "#9a9da4", display: "block", marginBottom: 3 }}>カテゴリ名</label>
+              <input value={kbEditForm.category} onChange={e => setKbEditForm(f => ({ ...f, category: e.target.value }))}
+                placeholder="例: 接続障害" style={{ width: "100%", background: "#2a2e35", border: "1px solid rgba(102,187,106,0.2)", borderRadius: 6, padding: "6px 10px", color: "#e0e2e6", fontSize: 12, marginBottom: 8, outline: "none", boxSizing: "border-box" }} />
+              <label style={{ fontSize: 10, color: "#9a9da4", display: "block", marginBottom: 3 }}>キーワード（カンマ区切り）</label>
+              <input value={kbEditForm.keywords} onChange={e => setKbEditForm(f => ({ ...f, keywords: e.target.value }))}
+                placeholder="例: 繋がらない,接続できない,ネット" style={{ width: "100%", background: "#2a2e35", border: "1px solid rgba(102,187,106,0.2)", borderRadius: 6, padding: "6px 10px", color: "#e0e2e6", fontSize: 12, marginBottom: 8, outline: "none", boxSizing: "border-box" }} />
+              <label style={{ fontSize: 10, color: "#9a9da4", display: "block", marginBottom: 3 }}>対応手順（改行区切り）</label>
+              <textarea value={kbEditForm.steps} onChange={e => setKbEditForm(f => ({ ...f, steps: e.target.value }))}
+                rows={4} placeholder={"手順1\n手順2\n手順3"} style={{ width: "100%", background: "#2a2e35", border: "1px solid rgba(102,187,106,0.2)", borderRadius: 6, padding: "6px 10px", color: "#e0e2e6", fontSize: 12, marginBottom: 8, outline: "none", resize: "vertical", boxSizing: "border-box" }} />
+              <label style={{ fontSize: 10, color: "#9a9da4", display: "block", marginBottom: 3 }}>ヒント（任意）</label>
+              <input value={kbEditForm.tip} onChange={e => setKbEditForm(f => ({ ...f, tip: e.target.value }))}
+                placeholder="オペレーター向けのアドバイス" style={{ width: "100%", background: "#2a2e35", border: "1px solid rgba(102,187,106,0.2)", borderRadius: 6, padding: "6px 10px", color: "#e0e2e6", fontSize: 12, marginBottom: 10, outline: "none", boxSizing: "border-box" }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button onClick={() => {
+                  if (!kbEditForm.category.trim()) return;
+                  const entry = {
+                    category: kbEditForm.category.trim(),
+                    keywords: kbEditForm.keywords.split(/[,、]/).map(s => s.trim()).filter(Boolean),
+                    steps: kbEditForm.steps.split("\n").map(s => s.trim()).filter(Boolean),
+                    tip: kbEditForm.tip.trim(),
+                  };
+                  const updated = [...kbItems];
+                  if (kbEditIndex >= 0) {
+                    updated[kbEditIndex] = entry;
+                  } else {
+                    updated.push(entry);
+                  }
+                  setKbItems(updated);
+                  saveKB(updated);
+                  setKbEditIndex(null);
+                  setKbEditForm({ category: "", keywords: "", steps: "", tip: "" });
+                }} style={{
+                  flex: 1, padding: "7px 0", borderRadius: 6, border: "none",
+                  background: "#66bb6a", color: "#1a1d23", fontWeight: 700, fontSize: 12, cursor: "pointer",
+                }}>
+                  {kbEditIndex >= 0 ? "更新" : "追加"}
+                </button>
+                <button onClick={() => { setKbEditIndex(null); setKbEditForm({ category: "", keywords: "", steps: "", tip: "" }); }} style={{
+                  padding: "7px 14px", borderRadius: 6, border: "1px solid rgba(255,255,255,0.15)",
+                  background: "transparent", color: "#9a9da4", fontSize: 12, cursor: "pointer",
+                }}>
+                  キャンセル
+                </button>
+              </div>
+            </div>
+          ) : null}
+
+          {/* カテゴリ一覧 */}
+          <div style={{ flex: 1, overflowY: "auto", marginBottom: 10 }}>
+            {kbItems.map((item, i) => (
+              <div key={i} style={{
+                padding: "10px 12px", marginBottom: 6, background: "#383c44", borderRadius: 8,
+                border: kbEditIndex === i ? "1px solid rgba(102,187,106,0.4)" : "1px solid rgba(255,255,255,0.06)",
+              }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#e0e2e6" }}>{item.category}</div>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    <button onClick={() => {
+                      setKbEditIndex(i);
+                      setKbEditForm({
+                        category: item.category,
+                        keywords: item.keywords.join(","),
+                        steps: item.steps.join("\n"),
+                        tip: item.tip || "",
+                      });
+                    }} style={{
+                      background: "none", border: "none", color: "#64b5f6", fontSize: 11, cursor: "pointer", padding: "2px 6px",
+                    }}>編集</button>
+                    <button onClick={() => {
+                      const updated = kbItems.filter((_, j) => j !== i);
+                      setKbItems(updated);
+                      saveKB(updated);
+                      if (kbEditIndex === i) { setKbEditIndex(null); setKbEditForm({ category: "", keywords: "", steps: "", tip: "" }); }
+                    }} style={{
+                      background: "none", border: "none", color: "#ef5350", fontSize: 11, cursor: "pointer", padding: "2px 6px",
+                    }}>削除</button>
+                  </div>
+                </div>
+                <div style={{ fontSize: 10, color: "#9a9da4", marginTop: 4 }}>
+                  キーワード: {item.keywords.join(", ")}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 追加・リセットボタン */}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => {
+              setKbEditIndex(-1);
+              setKbEditForm({ category: "", keywords: "", steps: "", tip: "" });
+            }} style={{
+              flex: 1, padding: "8px 0", borderRadius: 8, border: "1px solid rgba(102,187,106,0.3)",
+              background: "transparent", color: "#66bb6a", fontWeight: 700, fontSize: 12, cursor: "pointer",
+            }}>
+              + 新規追加
+            </button>
+            <button onClick={() => {
+              setKbItems([...DEFAULT_KB]);
+              saveKB([...DEFAULT_KB]);
+              setKbEditIndex(null);
+              setKbEditForm({ category: "", keywords: "", steps: "", tip: "" });
+            }} style={{
+              padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)",
+              background: "transparent", color: "#9a9da4", fontSize: 12, cursor: "pointer",
+            }}>
+              初期値に戻す
+            </button>
+          </div>
+          <div style={{ fontSize: 10, color: "#6a6d74", marginTop: 8, textAlign: "right" }}>
+            {kbItems.length} カテゴリ登録済み
+          </div>
+        </div>
+      )}
+
+      {/* API Settings Panel */}
+      {showApiSettings && (
+        <div style={{
+          position: "fixed",
+          bottom: 60,
+          right: 24,
+          zIndex: 200,
+          background: "#32363e",
+          border: "1px solid rgba(38,198,218,0.3)",
+          borderRadius: 14,
+          padding: "20px 24px",
+          width: 420,
+          maxHeight: "80vh",
+          overflowY: "auto",
+          boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
+          animation: "fadeSlideIn 0.3s ease",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <span style={{ color: "#26c6da", fontWeight: 700, fontSize: 14 }}>🔑 API設定</span>
+            <button onClick={() => setShowApiSettings(false)} style={{
+              background: "none", border: "none", color: "#9a9da4", fontSize: 16, cursor: "pointer",
+            }}>✕</button>
+          </div>
+
+          <div style={{ fontSize: 10, color: "#9a9da4", marginBottom: 16, lineHeight: 1.6 }}>
+            APIキーやURLを変更すると即座に反映されます。空欄にするとその機能は無効になります。
+          </div>
+
+          {/* Dify Settings */}
+          <div style={{ marginBottom: 16, padding: "12px 14px", background: "#383c44", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
+            <div style={{ fontSize: 11, color: "#26c6da", fontWeight: 700, marginBottom: 10, letterSpacing: "0.05em" }}>Dify AI（通話アシスト・要約）</div>
+            <label style={{ fontSize: 10, color: "#9a9da4", marginBottom: 4, display: "block" }}>API URL</label>
+            <input
+              type="text"
+              value={apiSettingsForm.difyApiUrl}
+              onChange={e => setApiSettingsForm(s => ({ ...s, difyApiUrl: e.target.value }))}
+              placeholder="https://api.dify.ai/v1/chat-messages"
+              style={{
+                width: "100%", background: "#2a2e35", border: "1px solid rgba(38,198,218,0.2)",
+                borderRadius: 6, padding: "7px 10px", color: "#e0e2e6", fontSize: 12, marginBottom: 10, outline: "none", boxSizing: "border-box",
+              }}
+            />
+            <label style={{ fontSize: 10, color: "#9a9da4", marginBottom: 4, display: "block" }}>API Key</label>
+            <input
+              type="password"
+              value={apiSettingsForm.difyApiKey}
+              onChange={e => setApiSettingsForm(s => ({ ...s, difyApiKey: e.target.value }))}
+              placeholder="app-xxxxxxxxxxxxxxxx"
+              style={{
+                width: "100%", background: "#2a2e35", border: "1px solid rgba(38,198,218,0.2)",
+                borderRadius: 6, padding: "7px 10px", color: "#e0e2e6", fontSize: 12, outline: "none", boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          {/* GAS Settings */}
+          <div style={{ marginBottom: 16, padding: "12px 14px", background: "#383c44", borderRadius: 10, border: "1px solid rgba(255,255,255,0.08)" }}>
+            <div style={{ fontSize: 11, color: "#26c6da", fontWeight: 700, marginBottom: 10, letterSpacing: "0.05em" }}>Google Apps Script（通話記録保存）</div>
+            <label style={{ fontSize: 10, color: "#9a9da4", marginBottom: 4, display: "block" }}>Webhook URL</label>
+            <input
+              type="text"
+              value={apiSettingsForm.gasUrl}
+              onChange={e => setApiSettingsForm(s => ({ ...s, gasUrl: e.target.value }))}
+              placeholder="https://script.google.com/macros/s/.../exec"
+              style={{
+                width: "100%", background: "#2a2e35", border: "1px solid rgba(38,198,218,0.2)",
+                borderRadius: 6, padding: "7px 10px", color: "#e0e2e6", fontSize: 12, marginBottom: 10, outline: "none", boxSizing: "border-box",
+              }}
+            />
+            <label style={{ fontSize: 10, color: "#9a9da4", marginBottom: 4, display: "block" }}>API Key</label>
+            <input
+              type="password"
+              value={apiSettingsForm.gasApiKey}
+              onChange={e => setApiSettingsForm(s => ({ ...s, gasApiKey: e.target.value }))}
+              placeholder="xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+              style={{
+                width: "100%", background: "#2a2e35", border: "1px solid rgba(38,198,218,0.2)",
+                borderRadius: 6, padding: "7px 10px", color: "#e0e2e6", fontSize: 12, outline: "none", boxSizing: "border-box",
+              }}
+            />
+          </div>
+
+          {/* Save / Reset buttons */}
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => {
+              saveApiSettings(apiSettingsForm);
+              setApiSettings({ ...apiSettingsForm });
+              setShowApiSettings(false);
+            }} style={{
+              flex: 1, padding: "9px 0", borderRadius: 8, border: "none",
+              background: "#26c6da", color: "#1a1d23", fontWeight: 700, fontSize: 12, cursor: "pointer",
+            }}>
+              保存
+            </button>
+            <button onClick={() => {
+              setApiSettingsForm({ ...API_DEFAULTS });
+            }} style={{
+              padding: "9px 14px", borderRadius: 8, border: "1px solid rgba(255,255,255,0.15)",
+              background: "transparent", color: "#9a9da4", fontSize: 12, cursor: "pointer",
+            }}>
+              初期値に戻す
+            </button>
+          </div>
+
+          {(!apiSettingsForm.difyApiKey && !apiSettingsForm.gasUrl) && (
+            <div style={{
+              marginTop: 12, padding: "8px 10px", borderRadius: 6,
+              background: "rgba(244,67,54,0.1)", border: "1px solid rgba(244,67,54,0.3)",
+              color: "#ef5350", fontSize: 11, textAlign: "center",
+            }}>
+              APIキーが未設定です。AIアシスト・記録保存が利用できません。
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Save Destination Settings Panel */}
       {showDestSettings && (
         <div style={{
@@ -2633,6 +2946,27 @@ ${fullText}`,
               background: "none", border: "none", color: "#9a9da4", fontSize: 16, cursor: "pointer",
             }}>✕</button>
           </div>
+
+          {/* Whisper モデル選択（Electron のみ） */}
+          {isElectron && (
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 10, color: "#ce93d8", letterSpacing: "0.08em", marginBottom: 6, display: "block" }}>
+                🤖 Whisper モデル（変更は次回の文字起こしから適用）
+              </label>
+              <select
+                value={whisperModel}
+                onChange={e => { setWhisperModel(e.target.value); localStorage.setItem("whisper_model", e.target.value); }}
+                style={{
+                  width: "100%", background: "#3a3f48", border: "1px solid rgba(171,71,188,0.25)",
+                  borderRadius: 8, padding: "8px 10px", color: "#e0e2e6", fontSize: 12, outline: "none", appearance: "none",
+                }}
+              >
+                <option value="tiny" style={{ background: "#32363e" }}>tiny — 高速・低精度（約75MB）</option>
+                <option value="base" style={{ background: "#32363e" }}>base — バランス型（約140MB）</option>
+                <option value="small" style={{ background: "#32363e" }}>small — 高精度・推奨（約460MB）</option>
+              </select>
+            </div>
+          )}
 
           {/* デュアルモード切替 */}
           <div style={{

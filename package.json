@@ -1,5 +1,7 @@
 {
   "name": "hikari-operator-assist",
+  "description": "光回線コールセンター向けオペレーターアシストツール",
+  "author": "Hikari",
   "private": true,
   "version": "1.0.0",
   "main": "electron/main.js",
@@ -7,12 +9,13 @@
     "dev": "vite",
     "dev:electron": "concurrently -k \"cross-env NODE_ENV=development vite\" \"wait-on http://localhost:5173/hikari-oa/ && cross-env NODE_ENV=development node electron/launch.js\"",
     "build": "vite build",
-    "build:electron": "cross-env BUILD_TARGET=electron vite build && electron-rebuild && electron-builder",
+    "build:electron": "cross-env BUILD_TARGET=electron CSC_IDENTITY_AUTO_DISCOVERY=false vite build && electron-rebuild && electron-builder",
     "preview": "vite preview",
     "lint": "eslint ."
   },
   "dependencies": {
     "@huggingface/transformers": "^3.8.1",
+    "electron-updater": "^6.8.3",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },
@@ -48,14 +51,35 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "!electron/test.js"
     ],
+    "extraResources": [],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "deleteAppDataOnUninstall": false,
+      "installerLanguages": ["ja"],
+      "language": "1041"
+    },
     "mac": {
       "target": "dmg",
       "category": "public.app-category.business"
     },
-    "win": {
-      "target": "nsis"
+    "publish": {
+      "provider": "github",
+      "owner": "your-org",
+      "repo": "hikari-operator-assist"
     }
   }
 }

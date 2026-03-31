@@ -1,26 +1,56 @@
 import { pipeline, env } from "@huggingface/transformers";
+import { app } from "electron";
+import path from "path";
 
-// ONNX Runtime は非ASCII パスを処理できないため C:\hikari-whisper に固定
-env.cacheDir = "C:\\hikari-whisper";
+// キャッシュディレクトリ: userData 配下に保存（ONNX の非ASCII パス問題を回避するため
+// フォールバックとして C:\hikari-whisper を使用）
+function getCacheDir() {
+  try {
+    const ud = app.getPath("userData");
+    // パスに非ASCII文字が含まれる場合は固定パスにフォールバック
+    if (/[^\x00-\x7F]/.test(ud)) {
+      return "C:\\hikari-whisper";
+    }
+    return path.join(ud, "whisper-models");
+  } catch {
+    return "C:\\hikari-whisper";
+  }
+}
+
+env.cacheDir = getCacheDir();
 
 // Electron の asar 内では WASM ファイルが見つからないため
 // onnxruntime-node のバックエンドを明示的に使用
 env.backends.onnx.wasm.numThreads = 4;
 
-let _pipe = null;
+// モデル設定
+const AVAILABLE_MODELS = {
+  tiny: "Xenova/whisper-tiny",
+  base: "Xenova/whisper-base",
+  small: "Xenova/whisper-small",
+};
 
-async function getPipeline() {
-  if (!_pipe) {
-    console.log("[whisper] モデルを初期化中（初回はダウンロードが発生します）...");
-    // Xenova/whisper-base は multilingual / 日本語対応
-    // dtype: 'q8' で量子化し速度・メモリを最適化
-    _pipe = await pipeline(
-      "automatic-speech-recognition",
-      "Xenova/whisper-small",
-      { dtype: "q8" }
-    );
-    console.log("[whisper] モデル初期化完了");
+let _pipe = null;
+let _currentModel = null;
+
+async function getPipeline(modelSize = "small") {
+  const modelId = AVAILABLE_MODELS[modelSize] || AVAILABLE_MODELS.small;
+  if (_pipe && _currentModel === modelId) return _pipe;
+
+  // モデルが変わった場合はリセット
+  if (_pipe && _currentModel !== modelId) {
+    _pipe = null;
+    _currentModel = null;
   }
+
+  console.log(`[whisper] モデルを初期化中: ${modelId}（初回はダウンロードが発生します）...`);
+  _pipe = await pipeline(
+    "automatic-speech-recognition",
+    modelId,
+    { dtype: "q8" }
+  );
+  _currentModel = modelId;
+  console.log("[whisper] モデル初期化完了");
   return _pipe;
 }
 
@@ -37,8 +67,6 @@ const HALLUCINATION_PATTERNS = [
 ];
 
 // 会話文中に混入した短い音響イベント表記を除去する
-// 例: "こんにちは（スパッ）" → "こんにちは"
-// 10文字以内に限定することで正当な括弧表現は残す
 function stripSoundNotations(text) {
   return text.replace(/[（(][^）)]{1,10}[）)]/g, "").trim();
 }
@@ -50,18 +78,17 @@ function isHallucination(text) {
 /**
  * 16kHz / Float32Array の音声データをテキストに変換する
  * @param {ArrayBuffer} arrayBuffer  resampleTo16k 後の Float32Array バッファ
+ * @param {string} modelSize  モデルサイズ ("tiny" | "base" | "small")
  * @returns {Promise<string>}  認識テキスト
  */
-export async function transcribeBuffer(arrayBuffer) {
+export async function transcribeBuffer(arrayBuffer, modelSize = "small") {
   const float32 = new Float32Array(arrayBuffer);
-  const pipe = await getPipeline();
+  const pipe = await getPipeline(modelSize);
   const result = await pipe(float32, {
     language: "japanese",
     task: "transcribe",
     chunk_length_s: 30,
     stride_length_s: 5,
-    // コールセンター会話のコンテキストを与えることで
-    // 環境音・音楽のノイズをテキスト化しにくくする
     initial_prompt:
       'これはインターネット光回線の電話サポートです。' +
       '阿蘇市（一の宮町宮地、坂梨、中坂梨、北坂梨、三野、手野、中通、荻の草、' +
@@ -76,4 +103,18 @@ export async function transcribeBuffer(arrayBuffer) {
   const text = stripSoundNotations((result?.text ?? "").trim());
   if (isHallucination(text)) return "";
   return text;
+}
+
+/**
+ * 利用可能なモデル一覧を返す
+ */
+export function getAvailableModels() {
+  return Object.keys(AVAILABLE_MODELS);
+}
+
+/**
+ * 現在のキャッシュディレクトリを返す
+ */
+export function getWhisperCacheDir() {
+  return env.cacheDir;
 }
