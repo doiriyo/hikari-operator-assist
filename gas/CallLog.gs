@@ -26,7 +26,7 @@ var CALLBACK_SHEET_NAME = "コールバック管理";
  * 不要になったら FORM_SS_ID を空文字にすれば無効化されます
  */
 var FORM_SS_ID = "1lYtmV34fVW9QJiXuwjbrsXGQUdlrFfzau3XabWUVsHc";
-var FORM_SHEET_NAME = "Form_Responses1";
+var FORM_SHEET_NAME = "フォームの回答 1";
 
 /**
  * 見出し定義（メインシート10項目 — 会話ログ列はリンクに変更）
@@ -155,6 +155,29 @@ function initialSetup() {
 
   SpreadsheetApp.flush();
   Logger.log("初期セットアップ完了: シート「" + SHEET_NAME + "」「" + LOG_SHEET_NAME + "」「" + CALLBACK_SHEET_NAME + "」を作成しました。");
+}
+
+/**
+ * 外部スプレッドシートへのアクセス認可テスト
+ * GASエディタからこの関数を一度実行して、外部スプレッドシートへの
+ * アクセス権限を認可してください。認可ダイアログが表示されます。
+ */
+function testFormSheetAccess() {
+  var formSs = SpreadsheetApp.openById(FORM_SS_ID);
+  var formSheet = formSs.getSheetByName(FORM_SHEET_NAME);
+  // 全シート名を一覧表示
+  var sheets = formSs.getSheets();
+  var names = [];
+  for (var i = 0; i < sheets.length; i++) {
+    names.push(sheets[i].getName());
+  }
+  Logger.log("シート一覧: " + JSON.stringify(names));
+
+  if (formSheet) {
+    Logger.log("OK: シート「" + FORM_SHEET_NAME + "」にアクセスできました。行数: " + formSheet.getLastRow());
+  } else {
+    Logger.log("ERROR: シート「" + FORM_SHEET_NAME + "」が見つかりません。上記一覧から正しいシート名を確認してください。");
+  }
 }
 
 /**
