@@ -78,7 +78,7 @@
     },
     "publish": {
       "provider": "github",
-      "owner": "your-org",
+      "owner": "doiriyo",
       "repo": "hikari-operator-assist"
     }
   }
