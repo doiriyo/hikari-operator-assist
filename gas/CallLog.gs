@@ -20,6 +20,15 @@ var LOG_SHEET_NAME = "会話ログ";
 var CALLBACK_SHEET_NAME = "コールバック管理";
 
 /**
+ * 電話対応フロー（回答）スプレッドシートへの同時記録設定
+ * - FORM_SS_ID: Googleフォーム回答シートのスプレッドシートID
+ * - FORM_SHEET_NAME: 書き込み先シート名（Form_Responses1）
+ * 不要になったら FORM_SS_ID を空文字にすれば無効化されます
+ */
+var FORM_SS_ID = "1lYtmV34fVW9QJiXuwjbrsXGQUdlrFfzau3XabWUVsHc";
+var FORM_SHEET_NAME = "Form_Responses1";
+
+/**
  * 見出し定義（メインシート10項目 — 会話ログ列はリンクに変更）
  */
 var HEADERS = [
@@ -252,6 +261,9 @@ function doPost(e) {
     cbRange.setNumberFormat("@");
     cbRange.setValues([cbRow]);
 
+    // --- 電話対応フロー（回答）シートにも同時記録 ---
+    appendToFormSheet_(timestamp, callerName, data.category, summary, data.callback_number, data.operator, data.contract_name, data.contract_address, data.callback_assignee);
+
     return ContentService
       .createTextOutput(JSON.stringify({ status: "ok" }))
       .setMimeType(ContentService.MimeType.JSON);
@@ -259,6 +271,46 @@ function doPost(e) {
     return ContentService
       .createTextOutput(JSON.stringify({ status: "error", message: err.toString() }))
       .setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+// ============================================================
+// 電話対応フロー（回答）シートへの同時記録
+// ============================================================
+
+/**
+ * 電話対応フロー（回答）スプレッドシートに1行追加する
+ * FORM_SS_ID が空の場合はスキップ（無効化）
+ * カラム: A=タイムスタンプ, B=名前, C=カテゴリ, D=内容, E=TEL, F=受領者
+ */
+function appendToFormSheet_(timestamp, callerName, category, summary, phone, operator, contractName, contractAddress, callbackAssignee) {
+  if (!FORM_SS_ID) return;
+  try {
+    var formSs = SpreadsheetApp.openById(FORM_SS_ID);
+    var formSheet = formSs.getSheetByName(FORM_SHEET_NAME);
+    if (!formSheet) {
+      Logger.log("フォーム回答シートが見つかりません: " + FORM_SHEET_NAME);
+      return;
+    }
+
+    // 内容欄を組み立て：要約 + 折返し情報 + 契約者情報
+    var contentParts = [];
+    if (summary) contentParts.push(summary);
+    if (callbackAssignee) contentParts.push("【要折返】担当: " + callbackAssignee);
+    if (contractName) contentParts.push("契約者名: " + contractName);
+    if (contractAddress) contentParts.push("契約住所: " + contractAddress);
+    var content = contentParts.join("\n");
+
+    formSheet.appendRow([
+      timestamp,
+      callerName || "",
+      category || "",
+      content,
+      phone || "",
+      operator || "",
+    ]);
+  } catch (err) {
+    Logger.log("フォーム回答シートへの書き込みエラー: " + err.toString());
   }
 }
 
