@@ -207,85 +207,93 @@ function doPost(e) {
       return handleGetCallbacks_(data);
     }
 
-    // --- 既存の通話記録処理 ---
-    var ss = SpreadsheetApp.getActiveSpreadsheet();
-    var sheet = ss.getSheetByName(SHEET_NAME);
-
-    if (!sheet) {
-      sheet = ss.insertSheet(SHEET_NAME);
-      sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
-    }
+    // --- 保存先フラグ（デフォルト: 両方ON） ---
+    var saveToMain = data.save_to_main !== false;
+    var saveToForm = data.save_to_form !== false;
 
     var timestamp = data.timestamp || new Date().toISOString();
     var callerName = data.caller_name || "不明";
     var conversationLog = data.conversation_log || "";
-
-    // --- 会話ログを別シートに保存 ---
-    var logSheet = ss.getSheetByName(LOG_SHEET_NAME);
-    if (!logSheet) {
-      logSheet = ss.insertSheet(LOG_SHEET_NAME);
-      logSheet.getRange(1, 1, 1, LOG_HEADERS.length).setValues([LOG_HEADERS]);
-    }
-
-    logSheet.appendRow([timestamp, callerName, conversationLog]);
-    var logRow = logSheet.getLastRow();
-
-    // --- メインシートに行を追加（会話ログ列はリンク） ---
-    var row = [
-      timestamp,
-      callerName,
-      data.category || "",
-      data.summary || "",
-      data.callback_number || "",
-      data.contract_name || "",
-      data.contract_address || "",
-      data.callback_assignee || "",
-      data.operator || "",
-      "", // 会話ログ列 — 下でハイパーリンクを設定
-    ];
-
-    sheet.appendRow(row);
-
-    // 会話ログ列にハイパーリンク数式を設定
-    var mainRow = sheet.getLastRow();
-    var logLink = "=HYPERLINK(\"#gid=" + logSheet.getSheetId() + "&range=C" + logRow + "\",\"会話ログを見る\")";
-    sheet.getRange(mainRow, 10).setFormula(logLink);
-
-    // 「要折返」で始まる内容の行を強調表示
     var summary = data.summary || "";
-    if (summary.indexOf("要折返") === 0) {
-      var lastRow = sheet.getLastRow();
-      var rowRange = sheet.getRange(lastRow, 1, 1, HEADERS.length);
-      rowRange.setBackground("#fff3e0");
-      rowRange.setFontColor("#e65100");
-      // 内容セルを太字に
-      sheet.getRange(lastRow, 4).setFontWeight("bold");
+
+    // --- メインシート（通話記録・会話ログ・コールバック管理）への保存 ---
+    if (saveToMain) {
+      var ss = SpreadsheetApp.getActiveSpreadsheet();
+      var sheet = ss.getSheetByName(SHEET_NAME);
+
+      if (!sheet) {
+        sheet = ss.insertSheet(SHEET_NAME);
+        sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+      }
+
+      // --- 会話ログを別シートに保存 ---
+      var logSheet = ss.getSheetByName(LOG_SHEET_NAME);
+      if (!logSheet) {
+        logSheet = ss.insertSheet(LOG_SHEET_NAME);
+        logSheet.getRange(1, 1, 1, LOG_HEADERS.length).setValues([LOG_HEADERS]);
+      }
+
+      logSheet.appendRow([timestamp, callerName, conversationLog]);
+      var logRow = logSheet.getLastRow();
+
+      // --- メインシートに行を追加（会話ログ列はリンク） ---
+      var row = [
+        timestamp,
+        callerName,
+        data.category || "",
+        summary,
+        data.callback_number || "",
+        data.contract_name || "",
+        data.contract_address || "",
+        data.callback_assignee || "",
+        data.operator || "",
+        "", // 会話ログ列 — 下でハイパーリンクを設定
+      ];
+
+      sheet.appendRow(row);
+
+      // 会話ログ列にハイパーリンク数式を設定
+      var mainRow = sheet.getLastRow();
+      var logLink = "=HYPERLINK(\"#gid=" + logSheet.getSheetId() + "&range=C" + logRow + "\",\"会話ログを見る\")";
+      sheet.getRange(mainRow, 10).setFormula(logLink);
+
+      // 「要対応」ステータスまたは「要折返」で始まる内容の行を強調表示
+      if (data.callback_status === "pending" || summary.indexOf("要折返") === 0) {
+        var lastRow = sheet.getLastRow();
+        var rowRange = sheet.getRange(lastRow, 1, 1, HEADERS.length);
+        rowRange.setBackground("#fff3e0");
+        rowRange.setFontColor("#e65100");
+        // 内容セルを太字に
+        sheet.getRange(lastRow, 4).setFontWeight("bold");
+      }
+
+      // --- コールバック管理シートにも自動追加 ---
+      var cbSheet = getCallbackSheet_();
+      var cbId = String(Date.now());
+      var cbStatus = data.callback_status || (summary.indexOf("要折返") === 0 ? "pending" : "done");
+      var cbMemo = (data.category ? data.category + "：" : "") + summary;
+      var cbRow = [
+        cbId,
+        normalizePhone_(data.callback_number),
+        callerName,
+        data.callback_assignee || data.operator || "",
+        cbMemo,
+        timestamp,
+        cbStatus,
+        timestamp,
+        data.contract_name || "",
+        data.contract_address || "",
+      ];
+      var cbNewRow = cbSheet.getLastRow() + 1;
+      var cbRange = cbSheet.getRange(cbNewRow, 1, 1, cbRow.length);
+      cbRange.setNumberFormat("@");
+      cbRange.setValues([cbRow]);
     }
 
-    // --- コールバック管理シートにも自動追加 ---
-    var cbSheet = getCallbackSheet_();
-    var cbId = String(Date.now());
-    var cbStatus = summary.indexOf("要折返") === 0 ? "pending" : "done";
-    var cbMemo = (data.category ? data.category + "：" : "") + summary;
-    var cbRow = [
-      cbId,
-      normalizePhone_(data.callback_number),
-      callerName,
-      data.callback_assignee || data.operator || "",
-      cbMemo,
-      timestamp,
-      cbStatus,
-      timestamp,
-      data.contract_name || "",
-      data.contract_address || "",
-    ];
-    var cbNewRow = cbSheet.getLastRow() + 1;
-    var cbRange = cbSheet.getRange(cbNewRow, 1, 1, cbRow.length);
-    cbRange.setNumberFormat("@");
-    cbRange.setValues([cbRow]);
-
-    // --- 電話対応フロー（回答）シートにも同時記録 ---
-    appendToFormSheet_(timestamp, callerName, data.category, summary, data.callback_number, data.operator, data.contract_name, data.contract_address, data.callback_assignee);
+    // --- 電話対応フロー（回答）シートへの保存 ---
+    if (saveToForm) {
+      appendToFormSheet_(timestamp, callerName, data.category, summary, data.callback_number, data.operator, data.contract_name, data.contract_address, data.callback_assignee);
+    }
 
     return ContentService
       .createTextOutput(JSON.stringify({ status: "ok" }))
@@ -381,6 +389,7 @@ function handleAddCallback_(data) {
   var memo = data.memo || "";
   var isLogEntry = memo.indexOf("【") === 0; // 【全件対応】【対応内容】等はログエントリ
   var status = isLogEntry ? "done" : (data.status || "pending");
+  Logger.log("add_callback: memo=" + memo + ", isLogEntry=" + isLogEntry + ", status=" + status + ", data.status=" + data.status);
 
   var row = [
     id,

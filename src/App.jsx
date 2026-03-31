@@ -85,6 +85,22 @@ function extractPhoneNumber(text) {
   return match ? match[0] : null;
 }
 
+// ── 保存先設定の永続化キー ──
+const DEST_SETTINGS_KEY = "save_destination_settings";
+
+function loadDestSettings() {
+  try {
+    const raw = localStorage.getItem(DEST_SETTINGS_KEY);
+    return raw ? JSON.parse(raw) : { saveToMain: true, saveToForm: true };
+  } catch {
+    return { saveToMain: true, saveToForm: true };
+  }
+}
+
+function saveDestSettings(settings) {
+  localStorage.setItem(DEST_SETTINGS_KEY, JSON.stringify(settings));
+}
+
 // ── デバイス設定の永続化キー ──
 const DEVICE_SETTINGS_KEY = "audio_device_settings";
 
@@ -174,6 +190,10 @@ export default function App() {
   const [correctionTo, setCorrectionTo] = useState("");
   const [triggerEnabled, setTriggerEnabled] = useState(() => loadDeviceSettings().triggerEnabled ?? false);
   const [triggerDeviceId, setTriggerDeviceId] = useState(() => loadDeviceSettings().triggerDeviceId ?? "");
+  // ── 保存先設定 ──
+  const [saveToMain, setSaveToMain] = useState(() => loadDestSettings().saveToMain);
+  const [saveToForm, setSaveToForm] = useState(() => loadDestSettings().saveToForm);
+  const [showDestSettings, setShowDestSettings] = useState(false);
   // ── アプリ切り替え ──
   const [appView, setAppView] = useState("assist"); // "assist" | "manager"
   // ── 着信顧客情報 ──
@@ -239,6 +259,11 @@ export default function App() {
   useEffect(() => {
     saveDeviceSettings({ operatorDeviceId, customerDeviceId, dualMode, triggerEnabled, triggerDeviceId });
   }, [operatorDeviceId, customerDeviceId, dualMode, triggerEnabled, triggerDeviceId]);
+
+  // ── 保存先設定の永続化 ──
+  useEffect(() => {
+    saveDestSettings({ saveToMain, saveToForm });
+  }, [saveToMain, saveToForm]);
 
   // ── コールバックデータ定期取得（着信時の顧客照合用） ──
   useEffect(() => {
@@ -515,6 +540,11 @@ ${fullText}`,
       return false;
     }
 
+    if (!saveToMain && !saveToForm) {
+      console.warn("保存先が選択されていません。");
+      return false;
+    }
+
     setSaveStatus("saving");
     try {
       // GASはCORSプリフライトに非対応のため、no-corsモードで送信
@@ -523,7 +553,12 @@ ${fullText}`,
         method: "POST",
         mode: "no-cors",
         headers: { "Content-Type": "text/plain" },
-        body: JSON.stringify({ ...data, api_key: GAS_API_KEY }),
+        body: JSON.stringify({
+          ...data,
+          api_key: GAS_API_KEY,
+          save_to_main: saveToMain,
+          save_to_form: saveToForm,
+        }),
       });
       // no-corsモードではレスポンスが不透明になるため、送信成功とみなす
       return true;
@@ -531,7 +566,7 @@ ${fullText}`,
       console.error("Spreadsheet save error:", err);
       return false;
     }
-  }, []);
+  }, [saveToMain, saveToForm]);
 
   // ── AIアシスト手動トリガー ──
   const triggerDifyAssist = useCallback(() => {
@@ -1114,7 +1149,7 @@ ${fullText}`,
     }
   };
 
-  const handleSaveSummary = async () => {
+  const handleSaveSummary = async (callbackStatus) => {
     const dataToSave = { ...editableSummary };
     // 折り返し担当者が指定されている場合、内容の先頭に「要折返TEL：〇〇」を付与
     if (dataToSave.callback_assignee) {
@@ -1123,6 +1158,8 @@ ${fullText}`,
         dataToSave.summary = `${prefix}\n${dataToSave.summary}`;
       }
     }
+    // 対応ステータスを付与
+    dataToSave.callback_status = callbackStatus; // "pending" | "done"
     // 話者付き会話ログを付与
     if (transcript.length > 0) {
       dataToSave.conversation_log = transcript.map(l => {
@@ -2291,6 +2328,17 @@ ${fullText}`,
           }}>
             🎧 音声設定
           </button>
+          <button onClick={() => setShowDestSettings(s => !s)} style={{
+            background: showDestSettings ? "rgba(255,167,38,0.15)" : "#3a3f48",
+            border: showDestSettings ? "1px solid rgba(255,167,38,0.4)" : "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 10,
+            padding: "10px 14px",
+            color: showDestSettings ? "#ffa726" : "#9a9da4",
+            fontSize: 12,
+            cursor: "pointer",
+          }}>
+            💾 保存先設定
+          </button>
           <button onClick={toggleDebug} style={{
             background: debugMode ? "rgba(100,181,246,0.1)" : "#3a3f48",
             border: debugMode ? "1px solid rgba(100,181,246,0.3)" : "1px solid rgba(255,255,255,0.1)",
@@ -2490,6 +2538,75 @@ ${fullText}`,
           <div style={{ fontSize: 10, color: "#6a6d74", marginTop: 8, textAlign: "right" }}>
             {customCorrections.length} 件登録済み
           </div>
+        </div>
+      )}
+
+      {/* Save Destination Settings Panel */}
+      {showDestSettings && (
+        <div style={{
+          position: "fixed",
+          bottom: 60,
+          right: 24,
+          zIndex: 200,
+          background: "#32363e",
+          border: "1px solid rgba(255,167,38,0.3)",
+          borderRadius: 14,
+          padding: "20px 24px",
+          width: 320,
+          boxShadow: "0 8px 32px rgba(0,0,0,0.5)",
+        }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+            <span style={{ color: "#ffa726", fontWeight: 700, fontSize: 14 }}>💾 保存先設定</span>
+            <button onClick={() => setShowDestSettings(false)} style={{
+              background: "none", border: "none", color: "#9a9da4", fontSize: 16, cursor: "pointer",
+            }}>✕</button>
+          </div>
+
+          <label style={{
+            display: "flex", alignItems: "center", gap: 10, marginBottom: 14,
+            cursor: "pointer", padding: "10px 12px", borderRadius: 8,
+            background: saveToMain ? "rgba(255,167,38,0.08)" : "transparent",
+            border: saveToMain ? "1px solid rgba(255,167,38,0.25)" : "1px solid rgba(255,255,255,0.06)",
+          }}>
+            <input
+              type="checkbox"
+              checked={saveToMain}
+              onChange={e => setSaveToMain(e.target.checked)}
+              style={{ accentColor: "#ffa726", width: 16, height: 16 }}
+            />
+            <div>
+              <div style={{ color: "#e0e2e6", fontSize: 13, fontWeight: 600 }}>通話記録シート</div>
+              <div style={{ color: "#6a6d74", fontSize: 11, marginTop: 2 }}>メインの通話記録・会話ログ・コールバック管理</div>
+            </div>
+          </label>
+
+          <label style={{
+            display: "flex", alignItems: "center", gap: 10,
+            cursor: "pointer", padding: "10px 12px", borderRadius: 8,
+            background: saveToForm ? "rgba(255,167,38,0.08)" : "transparent",
+            border: saveToForm ? "1px solid rgba(255,167,38,0.25)" : "1px solid rgba(255,255,255,0.06)",
+          }}>
+            <input
+              type="checkbox"
+              checked={saveToForm}
+              onChange={e => setSaveToForm(e.target.checked)}
+              style={{ accentColor: "#ffa726", width: 16, height: 16 }}
+            />
+            <div>
+              <div style={{ color: "#e0e2e6", fontSize: 13, fontWeight: 600 }}>電話対応フロー（回答）</div>
+              <div style={{ color: "#6a6d74", fontSize: 11, marginTop: 2 }}>Googleフォーム回答シートへのバックアップ</div>
+            </div>
+          </label>
+
+          {!saveToMain && !saveToForm && (
+            <div style={{
+              marginTop: 12, padding: "8px 10px", borderRadius: 6,
+              background: "rgba(244,67,54,0.1)", border: "1px solid rgba(244,67,54,0.3)",
+              color: "#ef5350", fontSize: 11, textAlign: "center",
+            }}>
+              保存先が未選択です。保存ボタンを押しても記録されません。
+            </div>
+          )}
         </div>
       )}
 
@@ -2733,9 +2850,9 @@ ${fullText}`,
             background: "#32363e",
             border: "1px solid rgba(255,255,255,0.1)",
             borderRadius: 16,
-            width: "90%",
-            maxWidth: 520,
-            maxHeight: "85vh",
+            width: "95%",
+            maxWidth: 960,
+            maxHeight: "90vh",
             display: "flex",
             flexDirection: "column",
             boxShadow: "0 20px 60px rgba(0,0,0,0.4)",
@@ -2766,9 +2883,6 @@ ${fullText}`,
                 }}
               >✕</button>
             </div>
-
-            {/* Scrollable Content */}
-            <div style={{ flex: 1, overflowY: "auto" }}>
 
             {/* Status Banner */}
             {saveStatus === "summarizing" && (
@@ -2812,118 +2926,169 @@ ${fullText}`,
               </div>
             )}
 
-            {/* Editable Fields */}
-            <div style={{ padding: "16px 24px 20px" }}>
-              {[
-                { key: "timestamp", label: "タイムコード", icon: "🕐" },
-                { key: "caller_name", label: "名前", icon: "👤" },
-                { key: "category", label: "カテゴリー", icon: "📂", type: "select",
-                  options: ["接続障害","速度低下","料金・請求","解約・退会","機器設定","その他"] },
-                { key: "summary", label: "内容", icon: "📝", multiline: true },
-                { key: "callback_number", label: "電話番号", icon: "📞" },
-                { key: "contract_name", label: "契約者名", icon: "📋" },
-                { key: "contract_address", label: "契約住所", icon: "🏠" },
-                { key: "callback_assignee", label: "折返担当者", icon: "🔄" },
-                { key: "operator", label: "受領者", icon: "🧑‍💼" },
-              ].map(({ key, label, icon, type, options, multiline }) => (
-                <div key={key} style={{ marginBottom: 14 }}>
-                  <label style={{
-                    fontSize: 11,
-                    color: "#9a9da4",
-                    letterSpacing: "0.08em",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                    marginBottom: 6,
-                  }}>
-                    <span>{icon}</span> {label}
-                  </label>
-                  {type === "select" ? (
-                    <select
-                      value={editableSummary[key]}
-                      onChange={e => handleEditField(key, e.target.value)}
-                      style={{
-                        width: "100%",
-                        background: "#3a3f48",
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        borderRadius: 8,
-                        padding: "9px 12px",
-                        color: "#e0e2e6",
-                        fontSize: 13,
-                        outline: "none",
-                        appearance: "none",
-                      }}
-                    >
-                      {options.map(o => <option key={o} value={o} style={{ background: "#32363e" }}>{o}</option>)}
-                    </select>
-                  ) : multiline ? (
-                    <textarea
-                      value={editableSummary[key]}
-                      onChange={e => handleEditField(key, e.target.value)}
-                      rows={3}
-                      style={{
-                        width: "100%",
-                        background: "#3a3f48",
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        borderRadius: 8,
-                        padding: "9px 12px",
-                        color: "#e0e2e6",
-                        fontSize: 13,
-                        lineHeight: 1.7,
-                        outline: "none",
-                        resize: "vertical",
-                        fontFamily: "inherit",
-                        boxSizing: "border-box",
-                      }}
-                    />
+            {/* 2-Column Layout: Transcript + Form */}
+            <div style={{ flex: 1, display: "flex", minHeight: 0 }}>
+
+              {/* Left: Transcript */}
+              <div style={{
+                width: "40%",
+                borderRight: "1px solid rgba(255,255,255,0.08)",
+                display: "flex",
+                flexDirection: "column",
+              }}>
+                <div style={{
+                  padding: "12px 16px 8px",
+                  fontSize: 11,
+                  color: "#9a9da4",
+                  fontWeight: 700,
+                  letterSpacing: "0.08em",
+                  borderBottom: "1px solid rgba(255,255,255,0.05)",
+                }}>
+                  🎙️ 通話ログ
+                </div>
+                <div style={{
+                  flex: 1,
+                  overflowY: "auto",
+                  padding: "10px 16px 16px",
+                  fontSize: 12,
+                  lineHeight: 1.8,
+                  color: "#c8cad0",
+                }}>
+                  {transcript.length === 0 ? (
+                    <div style={{ color: "#6a6d74", fontStyle: "italic", marginTop: 8 }}>通話ログなし</div>
                   ) : (
-                    <input
-                      value={editableSummary[key]}
-                      onChange={e => handleEditField(key, e.target.value)}
-                      style={{
-                        width: "100%",
-                        background: "#3a3f48",
-                        border: "1px solid rgba(255,255,255,0.12)",
-                        borderRadius: 8,
-                        padding: "9px 12px",
-                        color: "#e0e2e6",
-                        fontSize: 13,
-                        outline: "none",
-                        boxSizing: "border-box",
-                      }}
-                    />
+                    transcript.map((l, i) => (
+                      <div key={i} style={{ marginBottom: 6 }}>
+                        <span style={{
+                          fontSize: 10,
+                          color: l.speaker === "operator" ? "#5c6bc0" : l.speaker === "customer" ? "#ef5350" : "#6a6d74",
+                          fontWeight: 700,
+                          marginRight: 6,
+                        }}>
+                          {l.speaker === "operator" ? "[OP]" : l.speaker === "customer" ? "[CU]" : ""}
+                        </span>
+                        <span style={{ color: "#e0e2e6" }}>{l.text}</span>
+                        <span style={{ color: "#4a4d54", fontSize: 10, marginLeft: 6 }}>{l.ts}</span>
+                      </div>
+                    ))
                   )}
                 </div>
-              ))}
+              </div>
 
-              {/* Callback highlight */}
-              {callSummary && callSummary.callback_needed && (
-                <div style={{
-                  padding: "10px 14px",
-                  background: "rgba(92,107,192,0.08)",
-                  border: "1px solid rgba(92,107,192,0.2)",
-                  borderRadius: 10,
-                  marginBottom: 16,
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 10,
-                }}>
-                  <span style={{ fontSize: 16 }}>⚠️</span>
-                  <div>
-                    <div style={{ fontSize: 12, fontWeight: 700, color: "#5c6bc0", marginBottom: 2 }}>
-                      折り返し連絡が必要です
+              {/* Right: Editable Form */}
+              <div style={{ flex: 1, overflowY: "auto" }}>
+                <div style={{ padding: "16px 24px 20px" }}>
+                  {[
+                    { key: "timestamp", label: "タイムコード", icon: "🕐" },
+                    { key: "caller_name", label: "名前", icon: "👤" },
+                    { key: "category", label: "カテゴリー", icon: "📂", type: "select",
+                      options: ["接続障害","速度低下","料金・請求","解約・退会","機器設定","その他"] },
+                    { key: "summary", label: "内容", icon: "📝", multiline: true },
+                    { key: "callback_number", label: "電話番号", icon: "📞" },
+                    { key: "contract_name", label: "契約者名", icon: "📋" },
+                    { key: "contract_address", label: "契約住所", icon: "🏠" },
+                    { key: "callback_assignee", label: "折返担当者", icon: "🔄" },
+                    { key: "operator", label: "受領者", icon: "🧑‍💼" },
+                  ].map(({ key, label, icon, type, options, multiline }) => (
+                    <div key={key} style={{ marginBottom: 14 }}>
+                      <label style={{
+                        fontSize: 11,
+                        color: "#9a9da4",
+                        letterSpacing: "0.08em",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 6,
+                        marginBottom: 6,
+                      }}>
+                        <span>{icon}</span> {label}
+                      </label>
+                      {type === "select" ? (
+                        <select
+                          value={editableSummary[key]}
+                          onChange={e => handleEditField(key, e.target.value)}
+                          style={{
+                            width: "100%",
+                            background: "#3a3f48",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            borderRadius: 8,
+                            padding: "9px 12px",
+                            color: "#e0e2e6",
+                            fontSize: 13,
+                            outline: "none",
+                            appearance: "none",
+                          }}
+                        >
+                          {options.map(o => <option key={o} value={o} style={{ background: "#32363e" }}>{o}</option>)}
+                        </select>
+                      ) : multiline ? (
+                        <textarea
+                          value={editableSummary[key]}
+                          onChange={e => handleEditField(key, e.target.value)}
+                          rows={3}
+                          style={{
+                            width: "100%",
+                            background: "#3a3f48",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            borderRadius: 8,
+                            padding: "9px 12px",
+                            color: "#e0e2e6",
+                            fontSize: 13,
+                            lineHeight: 1.7,
+                            outline: "none",
+                            resize: "vertical",
+                            fontFamily: "inherit",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                      ) : (
+                        <input
+                          value={editableSummary[key]}
+                          onChange={e => handleEditField(key, e.target.value)}
+                          style={{
+                            width: "100%",
+                            background: "#3a3f48",
+                            border: "1px solid rgba(255,255,255,0.12)",
+                            borderRadius: 8,
+                            padding: "9px 12px",
+                            color: "#e0e2e6",
+                            fontSize: 13,
+                            outline: "none",
+                            boxSizing: "border-box",
+                          }}
+                        />
+                      )}
                     </div>
-                    {callSummary.callback_reason && (
-                      <div style={{ fontSize: 11, color: "#9a9da4" }}>
-                        {callSummary.callback_reason}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
+                  ))}
 
-            </div>
-            </div>{/* end scrollable content */}
+                  {/* Callback highlight */}
+                  {callSummary && callSummary.callback_needed && (
+                    <div style={{
+                      padding: "10px 14px",
+                      background: "rgba(92,107,192,0.08)",
+                      border: "1px solid rgba(92,107,192,0.2)",
+                      borderRadius: 10,
+                      marginBottom: 16,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 10,
+                    }}>
+                      <span style={{ fontSize: 16 }}>⚠️</span>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#5c6bc0", marginBottom: 2 }}>
+                          折り返し連絡が必要です
+                        </div>
+                        {callSummary.callback_reason && (
+                          <div style={{ fontSize: 11, color: "#9a9da4" }}>
+                            {callSummary.callback_reason}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+            </div>{/* end 2-column */}
 
             {/* Footer: 常に下部に固定 */}
             <div style={{
@@ -2934,11 +3099,11 @@ ${fullText}`,
               flexShrink: 0,
             }}>
               <button
-                onClick={handleSaveSummary}
+                onClick={() => handleSaveSummary("pending")}
                 disabled={saveStatus === "saving"}
                 style={{
                   flex: 1,
-                  background: "linear-gradient(135deg, #5c6bc0, #3f51b5)",
+                  background: "linear-gradient(135deg, #ef6c00, #e65100)",
                   border: "none",
                   borderRadius: 10,
                   padding: "11px 20px",
@@ -2950,7 +3115,26 @@ ${fullText}`,
                   opacity: saveStatus === "saving" ? 0.6 : 1,
                 }}
               >
-                {saveStatus === "saving" ? "保存中..." : "📤 スプレッドシートに保存"}
+                {saveStatus === "saving" ? "保存中..." : "⚠️ 要対応で保存"}
+              </button>
+              <button
+                onClick={() => handleSaveSummary("done")}
+                disabled={saveStatus === "saving"}
+                style={{
+                  flex: 1,
+                  background: "linear-gradient(135deg, #43a047, #2e7d32)",
+                  border: "none",
+                  borderRadius: 10,
+                  padding: "11px 20px",
+                  color: "#ffffff",
+                  fontSize: 13,
+                  fontWeight: 700,
+                  cursor: saveStatus === "saving" ? "wait" : "pointer",
+                  letterSpacing: "0.05em",
+                  opacity: saveStatus === "saving" ? 0.6 : 1,
+                }}
+              >
+                {saveStatus === "saving" ? "保存中..." : "✅ 対応済で保存"}
               </button>
               <button
                 onClick={() => setShowSummaryModal(false)}
